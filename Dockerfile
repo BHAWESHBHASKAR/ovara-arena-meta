@@ -43,9 +43,10 @@ COPY --from=app /build/web/dist ./web/dist
 COPY ovara ./ovara
 COPY boot.sh ./boot.sh
 RUN chmod +x boot.sh ovara/setup.sh
-# @paypal/mcp's bin is named `mcp`; call its entry point by path instead of that generic name
+# @paypal/mcp's bin is named `mcp`; call its entry point by path instead of that generic name.
+# No transactions.list: its schema carries the current time, so OVARA would ask for new pins every boot.
 ENV OVARA_DIR=/srv/ovara OVARA_PAY_CONF=/opt/ovara-pay/ovara PORT=10000 \
-    PAYPAL_MCP_CMD="node /usr/local/lib/node_modules/@paypal/mcp/dist/index.js --tools=all"
+    PAYPAL_MCP_CMD="node /usr/local/lib/node_modules/@paypal/mcp/dist/index.js --tools=invoices.create,invoices.list,invoices.get,invoices.send,invoices.sendReminder,invoices.cancel,invoices.generateQRC,orders.create,orders.get,orders.capture,disputes.list,disputes.get,disputes.create,payments.createRefund,payments.getRefunds"
 EXPOSE 10000
 ENTRYPOINT ["/usr/bin/tini", "--"]
 CMD ["./boot.sh"]

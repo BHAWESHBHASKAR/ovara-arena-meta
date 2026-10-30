@@ -20,6 +20,7 @@ test('findUntrusted reports notes with the object they came from', () => {
 
 test('summarize keeps the useful fields', () => {
   assert.equal(summarize('{"id":"INV2-1","status":"SENT"}', false), 'id INV2-1, status SENT');
+  assert.equal(summarize('{"success":true,"invoice_id":"INV2-2"}', false), 'success, invoice_id INV2-2');
   assert.equal(summarize('{"items":[1,2],"total_items":2}', false), '2 item(s), 2 in total');
   assert.match(summarize('plain text', true), /^error: plain text$/);
 });
@@ -44,4 +45,15 @@ test('a PayPal error body is an error, not untrusted text', () => {
 test('the wrapped HTTP error of the MCP server is an error', () => {
   const t = '{"ok":false,"status":404,"code":"PAYPAL_API_HTTP_ERROR","message":"The specified resource does not exist."}';
   assert.equal(summarize(t, false), 'error: 404 PAYPAL_API_HTTP_ERROR: The specified resource does not exist.');
+});
+
+test('untrustedFor prefers the note of the object the call names', async () => {
+  const { untrustedFor } = await import('../src/agent.js');
+  const items = [
+    { seq: 1, at: '', task_id: 't', kind: 'untrusted' as const, source: 'list_invoices INV2-AAAA: items[0].detail.note', text: 'first' },
+    { seq: 2, at: '', task_id: 't', kind: 'untrusted' as const, source: 'list_invoices INV2-BBBB: items[1].detail.note', text: 'second' },
+  ];
+  assert.equal(untrustedFor(items, { invoice_id: 'INV2-AAAA' })?.text, 'first');
+  assert.equal(untrustedFor(items, { capture_id: 'X' })?.text, 'second');
+  assert.equal(untrustedFor([], {}), undefined);
 });

@@ -19,7 +19,7 @@ import {
 } from './ovara.js';
 import { paypalConfigured, paypalToken } from './paypal.js';
 import { PolicyPanel } from './policy.js';
-import { loadSeed, scenarioTask, SCENARIO_NAMES, seed, seedStatus, type ScenarioName, type SeedState } from './scenarios.js';
+import { loadSeed, prepareScenario, SCENARIO_NAMES, SCENARIO_TEXT, seed, seedStatus, type ScenarioName, type SeedState } from './scenarios.js';
 
 const feed = new Feed();
 const host = new ToolHost();
@@ -75,6 +75,13 @@ async function pump(): Promise<void> {
   next.status = 'running';
   next.started_at = new Date().toISOString();
   try {
+    if (next.scenario && SCENARIO_NAMES.includes(next.scenario as ScenarioName)) {
+      // the invoices the scenario reads are open again before it starts
+      state.seed = await prepareScenario(next.scenario as ScenarioName).catch((e) => {
+        console.error(`prepare ${next.scenario}: ${(e as Error).message}`);
+        return state.seed;
+      });
+    }
     await agent.run(next, ctl.signal);
   } finally {
     controllers.delete(next.id);
@@ -326,8 +333,8 @@ route('POST', '/api/tasks', async (req) => {
   const b = await readBody(req);
   if (typeof b.scenario === 'string') {
     if (!SCENARIO_NAMES.includes(b.scenario as ScenarioName)) throw httpError(400, `scenario must be one of ${SCENARIO_NAMES.join(', ')}`);
-    const s = scenarioTask(b.scenario as ScenarioName, state.seed);
-    return enqueue(s.text, s.scenario);
+    const name = b.scenario as ScenarioName;
+    return enqueue(SCENARIO_TEXT[name], name);
   }
   const text = typeof b.text === 'string' ? b.text.trim() : '';
   if (!text) throw httpError(400, 'send {text} or {scenario}');
@@ -407,7 +414,8 @@ route('POST', '/api/policy/draft', async (req) => {
 route('POST', '/api/policy/draft/{id}/apply', async (_req, _res, [id]) => policy.apply(id));
 
 route('GET', '/api/replay', async () => {
-  for (const p of [join(config.webDist, 'replay.json'), join(config.webPublic, 'replay.json')]) {
+  // web/public is the recorded source; web/dist has the copy the build made
+  for (const p of [join(config.webPublic, 'replay.json'), join(config.webDist, 'replay.json')]) {
     try {
       return JSON.parse(await readFile(p, 'utf8'));
     } catch {
@@ -417,10 +425,11 @@ route('GET', '/api/replay', async () => {
   throw httpError(404, 'no replay.json');
 });
 
-// Not in the contract: re-run the seed step (it also captures orders a
-// sandbox buyer approved since the last boot) and show the seed ids.
-route('POST', '/api/seed', async () => {
-  state.seed = await seed();
+// Not in the contract: the seed ids, and a fresh seed (`{"force": true}`
+// clears the sandbox's open invoices first).
+route('POST', '/api/seed', async (req) => {
+  const b = await readBody(req);
+  state.seed = await seed(b.force === true);
   return { status: seedStatus(state.seed), seed: state.seed };
 });
 route('GET', '/api/seed', async () => ({ status: seedStatus(state.seed), seed: state.seed }));
@@ -466,8 +475,6 @@ async function boot(): Promise<void> {
       .then((s) => {
         state.seed = s;
         if (s?.problems.length) console.log(`seed: ${s.problems.length} problem(s): ${s.problems.join(' | ').slice(0, 600)}`);
-        const waiting = s?.orders.filter((o) => !o.capture_id) || [];
-        if (waiting.length) console.log(`seed: ${waiting.length} order(s) wait for a sandbox buyer to approve them (GET /api/seed shows the links)`);
       })
       .catch((e) => console.error(`seed: ${(e as Error).message}`));
   } else console.log('boot: PAYPAL_CLIENT_ID/SECRET not set; no seed, and "OVARA off" cannot run');

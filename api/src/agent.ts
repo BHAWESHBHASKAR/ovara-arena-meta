@@ -89,7 +89,7 @@ export async function chat(
 
 // --- PayPal tools for the model ---
 
-const TOOL_TOPICS = /invoice|order|refund|dispute|transaction/;
+const TOOL_TOPICS = /invoice|order|refund|dispute/;
 
 export function curatedTools(all: McpTool[]): McpTool[] {
   return all.filter((t) => TOOL_TOPICS.test(t.name));
@@ -151,6 +151,17 @@ export function isPayPalError(data: unknown): boolean {
   return !('id' in d) && !('status' in d);
 }
 
+// The untrusted text shown with a call: the newest one read from an object
+// the call names (an invoice id in its arguments), else the newest one.
+export function untrustedFor(items: FeedItem[], args: Record<string, unknown>): { source: string; text: string } | undefined {
+  const all = items.filter((i) => i.kind === 'untrusted') as (FeedItem & { source: string; text: string })[];
+  if (!all.length) return undefined;
+  const ids = Object.values(args).filter((v): v is string => typeof v === 'string' && v.length >= 6);
+  const named = [...all].reverse().find((u) => ids.some((id) => u.source.includes(id)));
+  const u = named || all[all.length - 1];
+  return { source: u.source, text: u.text };
+}
+
 export function summarize(text: string, isError: boolean): string {
   if (/^\s*(""|\{\})?\s*$/.test(text)) return isError ? 'error with no detail' : 'done (PayPal answered with no body)';
   const data = parseJson(text) as Record<string, unknown> | undefined;
@@ -164,7 +175,8 @@ export function summarize(text: string, isError: boolean): string {
     const items = (data.items || data.transaction_details || data.items_list) as unknown[] | undefined;
     if (Array.isArray(items)) parts.push(`${items.length} item(s)`);
     if (typeof data.total_items === 'number') parts.push(`${data.total_items} in total`);
-    for (const k of ['id', 'status', 'name', 'message']) if (typeof data[k] === 'string') parts.push(`${k} ${data[k]}`);
+    if (data.success === true) parts.push('success');
+    for (const k of ['id', 'invoice_id', 'status', 'name', 'message']) if (typeof data[k] === 'string') parts.push(`${k} ${data[k]}`);
     const detail = data.detail as Record<string, unknown> | undefined;
     if (detail && typeof detail.invoice_number === 'string') parts.push(`invoice ${detail.invoice_number}`);
     if (typeof data.href === 'string') parts.push(String(data.href).split('/').slice(-1)[0]);
@@ -434,7 +446,7 @@ export class Agent {
       return `Error: there is no tool named ${tool}.`;
     }
     const sha = argumentsSha256(args);
-    const untrusted = this.feed.lastOf(task.id, 'untrusted') as (FeedItem & { source: string; text: string }) | undefined;
+    const untrusted = untrustedFor(this.feed.forTask(task.id), args);
     const record: CallRecord = {
       task_id: task.id,
       tool,
@@ -451,11 +463,12 @@ export class Agent {
     const resource = toolResource(config.mcpName, tool);
     const started = Date.now();
     let held: PendingApproval | undefined;
+    let heldPushed: Promise<void> = Promise.resolve();
     const watch = off
       ? undefined
       : new HeldWatch(gateway, resource, sha, (a) => {
           held = a;
-          void this.pushHeld(task.id, tool, resource, a);
+          heldPushed = this.pushHeld(task.id, tool, resource, a);
         });
 
     let result: ToolResult;
@@ -466,9 +479,14 @@ export class Agent {
         this.feed.push(task.id, 'result', { tool, ok: false, summary: (e as Error).message.slice(0, 200) });
         return `Error: ${(e as Error).message}`;
       }
+      await heldPushed;
+      if (!held) held = await this.heldAfterAll(task.id, tool, resource, sha, started, e.rpc.data?.approval_id);
       return this.refusal(task, tool, resource, e, held);
     }
 
+    await heldPushed;
+    // answered before the 1.5 s check: ask the gateway whether a person decided it
+    if (!off && !held) held = await this.heldAfterAll(task.id, tool, resource, sha, started);
     if (off) {
       this.feed.push(task.id, 'decision', { tool, outcome: 'allowed', unchecked: true, rule: 'not checked: OVARA off' });
     } else if (held) {
@@ -512,11 +530,28 @@ export class Agent {
     });
   }
 
+  // A call that was held and answered before HeldWatch looked: find its
+  // approval among all approvals and put the `held` item in the feed late.
+  private async heldAfterAll(taskId: string, tool: string, resource: string, sha: string, since: number, id?: string): Promise<PendingApproval | undefined> {
+    try {
+      const all = await gateway.allApprovals();
+      const a = id
+        ? all.find((x) => x.approval_id === id)
+        : all
+            .filter((x) => x.action_type === 'mcp.tool_call' && x.resource === resource && x.context?.arguments_sha256 === sha && Date.parse(x.created_at) >= since - 2000)
+            .sort((x, y) => Date.parse(y.created_at) - Date.parse(x.created_at))[0];
+      if (!a) return undefined;
+      await this.pushHeld(taskId, tool, resource, a);
+      return a;
+    } catch {
+      return undefined;
+    }
+  }
+
   private async refusal(task: Task, tool: string, resource: string, e: RpcFailure, held: PendingApproval | undefined): Promise<string> {
     const reasons = e.rpc.data?.reasons || [];
     const approvalId = e.rpc.data?.approval_id || held?.approval_id;
     if (reasons.includes('approval_timeout')) {
-      if (!held && approvalId) this.feed.push(task.id, 'decision', { tool, outcome: 'held', approval_id: approvalId });
       this.feed.push(task.id, 'result', { tool, ok: false, summary: 'no answer from the operator in time; the call did not run' });
       return 'The operator did not answer in time; the call did not run. Do not retry it now; finish the rest of the task and mention it.';
     }

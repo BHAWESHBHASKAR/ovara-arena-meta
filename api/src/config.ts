@@ -11,6 +11,9 @@ function num(name: string, dflt: number): number {
   return Number.isFinite(v) && v > 0 ? v : dflt;
 }
 
+export const MCP_TOOLS =
+  'invoices.create,invoices.list,invoices.get,invoices.send,invoices.sendReminder,invoices.cancel,invoices.generateQRC,orders.create,orders.get,orders.capture,disputes.list,disputes.get,disputes.create,payments.createRefund,payments.getRefunds';
+
 const ovaraDir = resolve(process.env.OVARA_DIR || '/srv/ovara');
 
 export const config = {
@@ -27,7 +30,9 @@ export const config = {
   webDist: resolve(process.env.WEB_DIST || resolve(root, 'web/dist')),
   webPublic: resolve(root, 'web/public'),
 
-  mcpCmd: (process.env.PAYPAL_MCP_CMD || 'npx -y @paypal/mcp --tools=all').trim().split(/\s+/),
+  // every tool the agent may use except transactions.list, whose schema carries
+  // the current time and so would ask for a new pin on every boot
+  mcpCmd: (process.env.PAYPAL_MCP_CMD || `npx -y @paypal/mcp --tools=${MCP_TOOLS}`).trim().split(/\s+/),
   mcpName: 'paypal',
 
   paypalClientId: process.env.PAYPAL_CLIENT_ID || '',
