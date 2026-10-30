@@ -1,0 +1,20 @@
+{
+  "name": "ovara-pay-api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "API and agent loop for OVARA in front of PayPal's MCP server",
+  "license": "Apache-2.0",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx watch src/server.ts",
+    "start": "node dist/server.js",
+    "test": "tsx --test test/*.test.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
+  }
+}

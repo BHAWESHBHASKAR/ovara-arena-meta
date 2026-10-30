@@ -4,6 +4,7 @@
     { "action_type": "http.request", "environment": "*", "resource": "GET https://api.sandbox.paypal.com/*", "allow": true, "description": "PayPal reads" },
     { "action_type": "http.request", "environment": "*", "resource": "GET https://api-m.sandbox.paypal.com/*", "allow": true, "description": "PayPal reads" },
     { "action_type": "http.request", "environment": "*", "resource": "POST https://api.sandbox.paypal.com/v1/oauth2/token", "allow": true, "description": "token refresh carries no money" },
+    { "action_type": "http.request", "environment": "*", "resource": "POST https://api.sandbox.paypal.com/*", "allow": true, "description": "writes of the PayPal MCP server: it is the only process behind this proxy, so each POST is the request of a tool call OVARA already decided (mcp.tool_call)" },
 
     { "action_type": "mcp.tool_call", "environment": "*", "resource": "mcp:stdio:paypal/list_invoices", "allow": true, "description": "read" },
     { "action_type": "mcp.tool_call", "environment": "*", "resource": "mcp:stdio:paypal/get_invoice", "allow": true, "description": "read" },

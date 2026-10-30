@@ -22,9 +22,10 @@ RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/ovara ./cmd/ovara
 FROM node:22-bookworm-slim AS app
 WORKDIR /build
 COPY api/package.json api/package-lock.json* ./api/
-RUN cd api && npm ci --omit=dev --ignore-scripts 2>/dev/null || (cd api && npm install --omit=dev --ignore-scripts)
+# the build needs the dev dependencies (tsc); the runtime needs none
+RUN cd api && (npm ci --ignore-scripts 2>/dev/null || npm install --ignore-scripts)
 COPY api ./api
-RUN cd api && npm run build
+RUN cd api && npm run build && npm prune --omit=dev
 COPY web ./web
 RUN cd web && npm install && npm run build
 
@@ -42,7 +43,9 @@ COPY --from=app /build/web/dist ./web/dist
 COPY ovara ./ovara
 COPY boot.sh ./boot.sh
 RUN chmod +x boot.sh ovara/setup.sh
-ENV OVARA_DIR=/srv/ovara OVARA_PAY_CONF=/opt/ovara-pay/ovara PORT=10000
+# @paypal/mcp's bin is named `mcp`; call its entry point by path instead of that generic name
+ENV OVARA_DIR=/srv/ovara OVARA_PAY_CONF=/opt/ovara-pay/ovara PORT=10000 \
+    PAYPAL_MCP_CMD="node /usr/local/lib/node_modules/@paypal/mcp/dist/index.js --tools=all"
 EXPOSE 10000
 ENTRYPOINT ["/usr/bin/tini", "--"]
 CMD ["./boot.sh"]
