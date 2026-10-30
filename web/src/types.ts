@@ -80,9 +80,10 @@ export type Policy = { profile: 'strict' | 'observe'; rules: Rule[] }
 
 export type Draft = { draft_id: string; english: string; rules: Rule[]; valid: boolean; problems?: string[] }
 
-export type Scenario = 'shift' | 'refund' | 'poisoned'
+export type Scenario = 'shift' | 'duplicate' | 'poisoned'
 export type ReplayData = {
   placeholder?: boolean
   note?: string
+  recorded_at?: string
   scenarios: Partial<Record<string, { strict?: FeedItem[]; off?: FeedItem[] }>>
 }

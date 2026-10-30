@@ -7,6 +7,7 @@ import { PolicyPanel, Queue, Receipts, SCENARIOS, type VerifyResult } from './Pa
 
 type Mode = 'strict' | 'off'
 const LOADED_AT = Date.now()
+const SHORT: Record<string, string> = { poisoned: 'Poisoned note', duplicate: 'Duplicate', shift: 'Shift' }
 
 function usePoll(fn: () => Promise<unknown>, ms: number, deps: unknown[] = []) {
   useEffect(() => {
@@ -77,6 +78,8 @@ export default function App() {
     })
   }, [])
 
+  const rModes = (['strict', 'off'] as Mode[]).filter(m => (replay?.scenarios[rScenario]?.[m]?.length || 0) > 0)
+  useEffect(() => { if (rModes.length && !rModes.includes(rMode)) setRMode(rModes[0]) }, [rModes, rMode])
   const rItems = replay?.scenarios[rScenario]?.[rMode] || []
   useEffect(() => { setRIdx(0) }, [rScenario, rMode, rRun])
   useEffect(() => {
@@ -183,7 +186,11 @@ export default function App() {
 
   const scenarioMeta = SCENARIOS.find(s => s.id === rScenario)
   const replayDone = rIdx >= rItems.length && rItems.length > 0
-  const replayScenarios = replay ? Object.keys(replay.scenarios).filter(k => (replay.scenarios[k]?.strict?.length || 0) + (replay.scenarios[k]?.off?.length || 0) > 0) : []
+  const ORDER = ['poisoned', 'duplicate', 'shift']
+  const replayScenarios = replay ? Object.keys(replay.scenarios)
+    .filter(k => (replay.scenarios[k]?.strict?.length || 0) + (replay.scenarios[k]?.off?.length || 0) > 0)
+    .sort((a, b) => (ORDER.indexOf(a) + 1 || 99) - (ORDER.indexOf(b) + 1 || 99)) : []
+  const recordedAt = replay?.recorded_at ? new Date(replay.recorded_at) : null
   const feedItems = view === 'replay' ? rItems.slice(0, rIdx) : live
 
   const feedRight = (
@@ -217,18 +224,20 @@ export default function App() {
               <div className="replay-text">
                 {replay?.placeholder
                   ? <><span className="strong">Placeholder, not a recording.</span> <span className="dim">Sample lines that show the layout. A real run replaces them.</span></>
-                  : <><span className="strong">Recorded run</span> <span className="dim">of the {scenarioMeta?.title.toLowerCase() || rScenario} scenario, OVARA {rMode === 'strict' ? 'on' : 'off'}. Played back, nothing is calling PayPal.</span></>}
+                  : <><span className="strong">Recorded run</span> <span className="dim">of the {scenarioMeta?.title.toLowerCase() || rScenario} scenario, OVARA {rMode === 'strict' ? 'on' : 'off'}. Played back, nothing is calling PayPal.{recordedAt && !isNaN(recordedAt.getTime()) ? ` Recorded ${recordedAt.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}.` : ''}</span></>}
               </div>
               <div className="replay-actions">
                 {replayScenarios.length > 1 && (
-                  <select value={rScenario} onChange={e => setRScenario(e.target.value)} aria-label="Recorded scenario">
-                    {replayScenarios.map(k => <option key={k} value={k}>{SCENARIOS.find(s => s.id === k)?.title || k}</option>)}
-                  </select>
+                  <div className="seg-small" role="group" aria-label="Recorded scenario">
+                    {replayScenarios.map(k => <button key={k} className={rScenario === k ? 'on' : ''} onClick={() => setRScenario(k)}>{SHORT[k] || k}</button>)}
+                  </div>
                 )}
-                <div className="seg-small">
-                  <button className={rMode === 'strict' ? 'on' : ''} onClick={() => setRMode('strict')}>OVARA on</button>
-                  <button className={rMode === 'off' ? 'on' : ''} onClick={() => setRMode('off')}>OVARA off</button>
-                </div>
+                {rModes.length > 1 && (
+                  <div className="seg-small">
+                    <button className={rMode === 'strict' ? 'on' : ''} onClick={() => setRMode('strict')}>OVARA on</button>
+                    <button className={rMode === 'off' ? 'on' : ''} onClick={() => setRMode('off')}>OVARA off</button>
+                  </div>
+                )}
                 <button className="btn ghost" onClick={() => setRRun(n => n + 1)}>{replayDone ? 'Play again' : 'Restart'}</button>
                 <button className="btn primary" disabled={reachable === false} onClick={() => run({ scenario: (rScenario as Scenario) }).catch(() => {})}>Run it live</button>
               </div>

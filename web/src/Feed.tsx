@@ -71,7 +71,7 @@ function toLines(items: FeedItem[], forceOff: boolean): Line[] {
         return {
           key, at, label: 'PayPal', rowTone: leak ? 'leak' : '',
           text: leak
-            ? <><span className="strong">Money moved with OVARA off.</span> {it.summary}</>
+            ? <><span className="strong">Went through with OVARA off.</span> {it.summary}</>
             : stopped ? <>Never reached PayPal. <span className="dim">{it.summary}</span></>
             : <>{it.ok === false ? 'Failed: ' : ''}{it.summary || (it.ok === false ? 'no answer' : 'answered')}</>,
           right: leak ? 'went through' : stopped ? 'not sent' : it.ok === false ? 'failed' : 'answered', tone: leak ? 'leak' : 'dim',
