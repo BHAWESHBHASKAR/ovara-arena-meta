@@ -1,0 +1,8 @@
+{
+  "_comment": "Merged into the proxy.json that `ovara init` writes. The real token lives only in OVARA's environment; the MCP server runs with a placeholder.",
+  "escalate_timeout_sec": 120,
+  "credentials": [
+    { "host": "api.sandbox.paypal.com", "headers": { "Authorization": "Bearer ${PAYPAL_ACCESS_TOKEN}" } },
+    { "host": "api-m.sandbox.paypal.com", "headers": { "Authorization": "Bearer ${PAYPAL_ACCESS_TOKEN}" } }
+  ]
+}
