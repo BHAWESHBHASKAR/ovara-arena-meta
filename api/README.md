@@ -10,7 +10,7 @@ npm run dev         # tsx watch src/server.ts
 node dist/server.js
 ```
 
-It needs a running `ovara run -dir $OVARA_DIR` (gateway on 127.0.0.1:8080, proxy on 127.0.0.1:9443) whose own environment holds `PAYPAL_ACCESS_TOKEN`; `boot.sh` does that in the container. The API starts the PayPal MCP server itself, as `ovara mcp wrap -dir $OVARA_DIR -name paypal -- $PAYPAL_MCP_CMD` inside `ovara env`, so the server sees OVARA's placeholder token and its HTTPS goes through the proxy, which adds the real one.
+It needs a running `ovara run -dir $OVARA_DIR` (gateway on 127.0.0.1:8080, proxy on 127.0.0.1:9443) whose own environment holds `PAYPAL_CLIENT_ID` and `PAYPAL_CLIENT_SECRET`; `boot.sh` does that in the container. The API starts the PayPal MCP server itself, as `ovara mcp wrap -dir $OVARA_DIR -name paypal -- $PAYPAL_MCP_CMD` inside `ovara env`, so the server sees OVARA's placeholder token and its HTTPS goes through the proxy, which mints a sandbox token from the client credentials and adds it.
 
 ## Environment
 
@@ -21,10 +21,11 @@ It needs a running `ovara run -dir $OVARA_DIR` (gateway on 127.0.0.1:8080, proxy
 | `OVARA_GATEWAY_URL` | `http://127.0.0.1:8080` | the gateway's REST API |
 | `OVARA_PAY_CONF` | `../ovara` | where `policy.paypal.json` is; rules listed there show as `origin: "paypal"` |
 | `STATE_DIR` | `$OVARA_DIR/ovara-pay` | the API's own files: `seed.json` (sandbox ids), `policy-state.json` (profile, drafts), `runs/<task>.json` (each run's feed, the source for `replay.json`) |
+| `WEB_DIST` | `../web/dist` from the compiled file | the built console; the image sets `/opt/ovara-pay/web/dist` |
 | `PORT` | `10000` | HTTP port: `/api/*` and the console from `../web/dist` (a one-line placeholder if it is not built) |
 | `API_TOKEN` | none | if set, every `/api/*` write needs `Authorization: Bearer <API_TOKEN>`; reads stay open |
 | `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET` | none | sandbox app credentials. The API uses them only for the seed step and for the "OVARA off" run; the wrapped MCP server never gets them. |
-| `PAYPAL_ACCESS_TOKEN` | none | used by the API only when the client id and secret are absent. The `ovara run` process needs it in its own environment for the proxy. |
+| `PAYPAL_ACCESS_TOKEN` | none | used by the API only when the client id and secret are absent. OVARA does not need it: its proxy mints PayPal tokens from the client id and secret (an `oauth2` binding in `proxy.json`) and replaces each before it expires. |
 | `PAYPAL_MCP_CMD` | `npx -y @paypal/mcp --tools=<list>` | the PayPal MCP server command, split on spaces. The default list is every tool group except `transactions.list` (`invoices.*`, `orders.create/get/capture`, `disputes.list/get/create`, `payments.createRefund/getRefunds`): that tool's schema carries the current time, so with it OVARA asks for new tool pins on every boot. The image sets the same list on the globally installed package. |
 | `META_API_KEY` | none | Meta Model API key for the models |
 | `META_BASE_URL` | `https://api.meta.ai/v1` | |

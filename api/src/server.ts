@@ -503,6 +503,10 @@ setInterval(async () => {
 
 server.listen(config.port, () => {
   console.log(`ovara-pay api on :${config.port} (OVARA_DIR ${config.ovaraDir})`);
+  stat(join(config.webDist, 'index.html')).then(
+    () => console.log(`console: ${config.webDist}`),
+    () => console.log(`console: no index.html in ${config.webDist} (set WEB_DIST); / shows a placeholder`),
+  );
   void boot();
 });
 

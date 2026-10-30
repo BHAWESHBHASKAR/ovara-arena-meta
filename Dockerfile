@@ -5,8 +5,10 @@
 #   stage 3  runtime: Node 22 (PayPal MCP server, API), Python 3 (setup), the ovara binary
 #
 # Nothing secret is baked in. PAYPAL_CLIENT_ID / PAYPAL_CLIENT_SECRET / META_API_KEY
-# arrive as environment variables at run time and are read by OVARA only; the agent
-# and the MCP server see placeholders.
+# arrive as environment variables at run time. OVARA mints PayPal tokens from the
+# client credentials; the wrapped MCP server sees a placeholder. The API uses the
+# client credentials for the seed step and the "OVARA off" run, and the Meta key
+# for the models.
 
 ARG OVARA_REPO=https://github.com/SidianLabs/OVARA.git
 ARG OVARA_COMMIT=b12111047101cebdd0bdfd22839f3f56f0d8f060
@@ -45,7 +47,7 @@ COPY boot.sh ./boot.sh
 RUN chmod +x boot.sh ovara/setup.sh
 # @paypal/mcp's bin is named `mcp`; call its entry point by path instead of that generic name.
 # No transactions.list: its schema carries the current time, so OVARA would ask for new pins every boot.
-ENV OVARA_DIR=/srv/ovara OVARA_PAY_CONF=/opt/ovara-pay/ovara PORT=10000 \
+ENV OVARA_DIR=/srv/ovara OVARA_PAY_CONF=/opt/ovara-pay/ovara PORT=10000 WEB_DIST=/opt/ovara-pay/web/dist \
     PAYPAL_MCP_CMD="node /usr/local/lib/node_modules/@paypal/mcp/dist/index.js --tools=invoices.create,invoices.list,invoices.get,invoices.send,invoices.sendReminder,invoices.cancel,invoices.generateQRC,orders.create,orders.get,orders.capture,disputes.list,disputes.get,disputes.create,payments.createRefund,payments.getRefunds"
 EXPOSE 10000
 ENTRYPOINT ["/usr/bin/tini", "--"]

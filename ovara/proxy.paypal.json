@@ -1,8 +1,8 @@
 {
-  "_comment": "Merged into the proxy.json that `ovara init` writes. The real token lives only in OVARA's environment; the MCP server runs with a placeholder.",
+  "_comment": "Merged into the proxy.json that `ovara init` writes. OVARA mints the PayPal sandbox token itself (OAuth2 client credentials) from PAYPAL_CLIENT_ID/SECRET in its own environment and mints a new one before each expires; the MCP server runs with a placeholder and never sees the client secret or a token.",
   "escalate_timeout_sec": 120,
   "credentials": [
-    { "host": "api.sandbox.paypal.com", "headers": { "Authorization": "Bearer ${PAYPAL_ACCESS_TOKEN}" } },
-    { "host": "api-m.sandbox.paypal.com", "headers": { "Authorization": "Bearer ${PAYPAL_ACCESS_TOKEN}" } }
+    { "host": "api.sandbox.paypal.com", "oauth2": { "token_url": "https://api-m.sandbox.paypal.com/v1/oauth2/token", "client_id": "${PAYPAL_CLIENT_ID}", "client_secret": "${PAYPAL_CLIENT_SECRET}" } },
+    { "host": "api-m.sandbox.paypal.com", "oauth2": { "token_url": "https://api-m.sandbox.paypal.com/v1/oauth2/token", "client_id": "${PAYPAL_CLIENT_ID}", "client_secret": "${PAYPAL_CLIENT_SECRET}" } }
   ]
 }
