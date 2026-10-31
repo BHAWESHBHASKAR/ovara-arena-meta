@@ -337,7 +337,10 @@ export async function proxyOk(): Promise<boolean> {
 // and the anchors.
 export async function verifyChainCli(): Promise<{ ok: boolean; detail: string }> {
   const r = await runCli(['log', '-dir', config.ovaraDir, '-verify-only'], 60000);
-  return { ok: r.code === 0, detail: (r.stdout + r.stderr).trim() };
+  const detail = (r.stdout + r.stderr).trim();
+  // before the first proxied request there is no log to verify; that is not a broken chain
+  const empty = r.code !== 0 && /no such file|no receipts|empty|0 receipts/i.test(detail);
+  return { ok: r.code === 0 || empty, detail: empty ? 'proxy: no receipts yet' : detail };
 }
 
 export const policyPath = () => join(config.ovaraDir, 'policy.json');
