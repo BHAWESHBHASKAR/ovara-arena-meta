@@ -1,0 +1,175 @@
+{
+ "version": 1,
+ "servers": {
+  "stdio:paypal": {
+   "accept_dispute_claim": {
+    "sha256": "861497e9f6eb07b108cb15c0c6fd64c92f04204814625de74317e731b61d86f3",
+    "description": "\nAccept liability for a dispute claim.\n\nThis tool is used to accept liability for a dispute claim. When you accept liability for a dispute claim, the dispute closes in the customer's favor and PayPal automatically refunds money to the customer from the merchant's account.\n",
+    "approved_at": "2026-10-30T18:28:59.576406Z",
+    "approval_id": "apr_51bf84ce-1e8c-442e-aea1-19f78188c670"
+   },
+   "cancel_sent_invoice": {
+    "sha256": "592449183297a8eb2766f5480f19feab913dd52e5224ad4a904442670ee99866",
+    "description": "\nCancel a sent invoice.\n\nThis function cancels an invoice that has already been sent to the recipient(s).\n",
+    "approved_at": "2026-10-30T18:28:59.576406Z",
+    "approval_id": "apr_51bf84ce-1e8c-442e-aea1-19f78188c670"
+   },
+   "cancel_subscription": {
+    "sha256": "62aa0d5678c7cc0ffb83f47acd8ebb61579a41782885f6fa9fbc53882e35f46e",
+    "description": "\nCancel a customer subscription in PayPal.\n\nThis function cancels an active subscription for a customer. It requires the subscription ID and an optional reason for cancellation.\nRequired parameters are: subscription_id (the ID of the subscription to be canceled).\nBelow is the payload request structure:\n{\n    \"reason\": \"Customer requested cancellation\"\n}\nYou MUST ask the user for: \n - subscription_id\n - reason for cancellation.\n\nReturn all of the above as structured JSON in your response.\n",
+    "approved_at": "2026-10-30T18:28:59.576406Z",
+    "approval_id": "apr_51bf84ce-1e8c-442e-aea1-19f78188c670"
+   },
+   "create_invoice": {
+    "sha256": "e5da3aa1458658c40d7a0ccebadf1a438819cc8c19a9c7c58c9ebef31c5b8045",
+    "description": "\nCreate Invoices on PayPal.\n\nThis function creates a draft invoice, specifying a currency code, the invoicer's business information, one or more recipients to bill, and line items. Once created, the invoice can be sent to the customer for payment.\n\nprimary_recipients and items use PayPal's real nested shape (billing_info/shipping_info for recipients; unit_amount/tax/discount for items); other fields use a simplified flat shape.\n",
+    "approved_at": "2026-10-30T18:28:59.576406Z",
+    "approval_id": "apr_51bf84ce-1e8c-442e-aea1-19f78188c670"
+   },
+   "create_order": {
+    "sha256": "195bd77b142b89bb5581443711196e1425b23482b3d71f9fb0095b0176362094",
+    "description": "\nCreate an order in PayPal.\n\nThis tool is used to create a new order in PayPal. This is typically the first step in initiating a payment flow. It sets up an order with specified details such as item(s) to be purchased, quantity, amount, currency, and other details.\n",
+    "approved_at": "2026-10-30T18:28:59.576406Z",
+    "approval_id": "apr_51bf84ce-1e8c-442e-aea1-19f78188c670"
+   },
+   "create_product": {
+    "sha256": "08e8e9c7f47dfe2de966134ae7332e172459e526401e0469805681c95f8748ca",
+    "description": "\nCreate a product in PayPal using product catalog - create products API.\nThis function creates a new product that will be used in subscription plans, subscriptions.\nRequired parameters are: name (product name), type (product type).\nHigh level: \n    - id: (auto-generated or specify SKU of the product) The ID of the product\n    - name: {product_name} (required) \n    - description: {product_description} (optional)\n    - type {DIGITAL | PHYSICAL | SERVICE} (required)\n    - category: {product_category} (optional) \n    - image_url: {image_url} (optional)\n    - home_url: {home_url} (optional)\n\nBelow is the payload request structure:\n{\n    \"id\": \"#PROD-XYAB12ABSB7868434\",\n    \"name\": \"Video Streaming Service\",\n    \"description\": \"Service for streaming latest series, movies etc.\",\n    \"type\": \"SERVICE\",\n    \"category\": \"SOFTWARE\",\n    \"image_url\": \"https://example.com/streaming.jpg\",\n    \"home_url\": \"https://example.com/home\"\n}\n\n",
+    "approved_at": "2026-10-30T18:28:59.576406Z",
+    "approval_id": "apr_51bf84ce-1e8c-442e-aea1-19f78188c670"
+   },
+   "create_refund": {
+    "sha256": "822aee5fbc2e2f88fd3a53c666c102c88858172b9939b8afa3c7de9ca494ec01",
+    "description": "\nInitiate a refund for a PayPal payment capture.\nIf you have an order ID instead of a capture ID, first use the get order tool to obtain the capture ID from the order details.\nThis function allows you to return funds to a customer by refunding a previously captured payment. You can issue a full refund or specify a partial amount. If multiple captures exist for an order, request clarification on which specific capture to refund.\nRequired parameters:\n- Capture ID: The ID of the capture to refund\n- Amount (optional): For partial refunds, specify the amount to refund (must be less than or equal to the captured amount)\n- Note to Payer (optional): Additional explanation visible to the customer\nResponse details include:\n- Refund ID and status\n- Refunded amount and currency\n\n",
+    "approved_at": "2026-10-30T18:28:59.576406Z",
+    "approval_id": "apr_51bf84ce-1e8c-442e-aea1-19f78188c670"
+   },
+   "create_shipment_tracking": {
+    "sha256": "1fc5da4d0be41206dde3edea556c32b44c83c221087ad524eea6ca51ec5627d5",
+    "description": "\nCreate a shipment for a transaction in PayPal.\nThis function creates a shipment record for a specific transaction, allowing you to track the shipment status and details.\nThe transaction_id can fetch from the captured payment details in the order information.\nRequired parameters are: tracking_number (the tracking number for the shipment), transaction_id (the transaction ID associated with the shipment). \nHigh level: tracking_number, transaction_id, status (optional), carrier (optional) are required json objects.\nBelow is the payload request structure:\n{\n    \"tracking_number\": \"1234567890\",\n    \"transaction_id\": \"9XJ12345ABC67890\",\n    \"status\": \"SHIPPED\", // Required: ON_HOLD, SHIPPED, DELIVERED, CANCELLED\n    \"carrier\": \"UPS\" // Required: The carrier handling the shipment. Link to supported carriers: http://developer.paypal.com/docs/tracking/reference/carriers/\n}\n",
+    "approved_at": "2026-10-30T18:28:59.576406Z",
+    "approval_id": "apr_51bf84ce-1e8c-442e-aea1-19f78188c670"
+   },
+   "create_subscription": {
+    "sha256": "4fb37372cd702000ce5f076a29683c0ca8f95019e7c683fb734cb648e6084c44",
+    "description": "\nCreate a subscription in PayPal using the subscription - create subscription API.\nThis function allows you to create a new subscription for a specific plan, enabling the management of recurring payments.\nThe only required parameter is plan_id (the ID of the subscription plan). All other fields are optional and can be omitted if not provided.\nThe subscriber field is optional. If no subscriber information is provided, omit the subscriber field in the request payload.\nThe shipping address is optional. If no shipping address is provided, set the shipping_preference to GET_FROM_FILE in the application context.\nThe application context is also optional. If no application context information is provided, omit the application context field in the request payload.\n",
+    "approved_at": "2026-10-30T18:28:59.576406Z",
+    "approval_id": "apr_51bf84ce-1e8c-442e-aea1-19f78188c670"
+   },
+   "create_subscription_plan": {
+    "sha256": "1d631d8c5bd902bced671cfc1da68899f4e083f50db03f5f5610efd1fbd7a628",
+    "description": "\nCreate a subsctiption plan in PayPal using subscription - create plan API.\nThis function creates a new subscription plan that defines pricing and billing cycle details for subscriptions.\nRequired parameters are: product_id (the ID of the product for which to create the plan), name (subscription plan name), billing_cycles (billing cycle details).\nHigh level: product_id, name, description, taxes, status: {CREATED|INACTIVE|ACTIVE}, billing_cycles, payment_preferences are required in json object.\nWhile creating billing_cycles object, trial(second) billing cycle should precede regular billing cycle.\n",
+    "approved_at": "2026-10-30T18:28:59.576406Z",
+    "approval_id": "apr_51bf84ce-1e8c-442e-aea1-19f78188c670"
+   },
+   "generate_invoice_qr_code": {
+    "sha256": "98618abf59a6e432cfada5b3758bff81f356416686d85704d7ffbedac3eebe28",
+    "description": "\nGenerate a QR code for an invoice.\n\nThis function generates a QR code for an invoice, which can be used to pay the invoice using a mobile device or scanning app.\n",
+    "approved_at": "2026-10-30T18:28:59.576406Z",
+    "approval_id": "apr_51bf84ce-1e8c-442e-aea1-19f78188c670"
+   },
+   "get_dispute": {
+    "sha256": "21c093d248a5f797b4b6d54a413aafdde38de44ef83452c8efe3e8a59d57b9a3",
+    "description": "\nGet details for a specific dispute from PayPal.\n\nThis tool is used to lists disputes with a summary set of details, which shows the dispute_id, reason, status, dispute_state, dispute_life_cycle_stage, dispute_channel, dispute_amount, create_time and update_time fields.\n",
+    "approved_at": "2026-10-30T18:28:59.576406Z",
+    "approval_id": "apr_51bf84ce-1e8c-442e-aea1-19f78188c670"
+   },
+   "get_invoice": {
+    "sha256": "18b84ec7d5498856047c70ee71301db78936455d0019b15e2fcccc015ec3de08",
+    "description": "\nGet an invoice from PayPal.\n\nThis function retrieves details of a specific invoice using its ID.\n",
+    "approved_at": "2026-10-30T18:28:59.576406Z",
+    "approval_id": "apr_51bf84ce-1e8c-442e-aea1-19f78188c670"
+   },
+   "get_order": {
+    "sha256": "e343d686c1a92860c03e570c29e2d63a402814bced508141323ab1e96cbe7993",
+    "description": "\nRetrieves the order details from PayPal for a given order ID.\n\nThis tool is used to retrieve details of an existing order in PayPal. It provides information about the order, including items, amounts, status, and other relevant details.\n",
+    "approved_at": "2026-10-30T18:28:59.576406Z",
+    "approval_id": "apr_51bf84ce-1e8c-442e-aea1-19f78188c670"
+   },
+   "get_refund": {
+    "sha256": "2854281f738b449da65d3ae992decf1c34953cfa9e98add74f5807c4a6421ec6",
+    "description": "\nRetrieve detailed information about a PayPal payment refund.\nIf you have an order ID instead of a refund ID, first use the get order tool to obtain the refund ID from the order details. \nThis function returns comprehensive details about a refund, including its current status (completed, pending, cancelled), refunded amount, and processing information.\nWhen multiple refunds exist for an order or capture, request clarification on which specific refund to retrieve. \nResponse details include:\n- Refund status and ID\n- Refunded amount and currency\n- Reason for refund (if provided)\n- Source transaction details\n",
+    "approved_at": "2026-10-30T18:28:59.576406Z",
+    "approval_id": "apr_51bf84ce-1e8c-442e-aea1-19f78188c670"
+   },
+   "get_shipment_tracking": {
+    "sha256": "db7f072bb6c621917184d38bd92f99a9f71248c9dddb5d6212fb0f929355fab0",
+    "description": "\nGet tracking information for a shipment by ID.\nThis function retrieves tracking information for a specific shipment using the transaction ID and tracking number.\nThe transaction_id can fetch from the captured payment details in the order information.\nBelow is the payload request structure:\n",
+    "approved_at": "2026-10-30T18:28:59.576406Z",
+    "approval_id": "apr_51bf84ce-1e8c-442e-aea1-19f78188c670"
+   },
+   "list_disputes": {
+    "sha256": "4a7c4c346fd5bb72c282922cabd698517445c31b768eba0dc612b08ac0e9f5d8",
+    "description": "\nList disputes from PayPal.\n\nThis function retrieves a list of disputes with optional pagination and filtering parameters.\n",
+    "approved_at": "2026-10-30T18:28:59.576406Z",
+    "approval_id": "apr_51bf84ce-1e8c-442e-aea1-19f78188c670"
+   },
+   "list_invoices": {
+    "sha256": "55b521e1efc5904d7ee52f838c66b508ccf17e6c9236a6d749b43ca8de57ce96",
+    "description": "\nList invoices from PayPal.\n\nThis function retrieves a list of invoices with optional pagination parameters.\n",
+    "approved_at": "2026-10-30T18:28:59.576406Z",
+    "approval_id": "apr_51bf84ce-1e8c-442e-aea1-19f78188c670"
+   },
+   "list_products": {
+    "sha256": "e776bffe3e2a7cc1205b3c7503da11ac4a433a9d89f4eb8c8758679b7f31101e",
+    "description": "\nList products from PayPal.\n\nThis function retrieves a list of products with optional pagination parameters.\n",
+    "approved_at": "2026-10-30T18:28:59.576406Z",
+    "approval_id": "apr_51bf84ce-1e8c-442e-aea1-19f78188c670"
+   },
+   "list_subscription_plans": {
+    "sha256": "e59b2865ef9a4f080b644bb847bb46d8558437427c367d95f2e0192af829222c",
+    "description": "\nList subscription plans from PayPal.\n\nThis function retrieves a list of subscription plans with optional product filtering and pagination parameters.\n",
+    "approved_at": "2026-10-30T18:28:59.576406Z",
+    "approval_id": "apr_51bf84ce-1e8c-442e-aea1-19f78188c670"
+   },
+   "list_transactions": {
+    "sha256": "9c22feeea55bf301b53645fc6af91a0dce738c0f86140a5d6d0f131742fff5d5",
+    "description": "\nList transactions from PayPal.\n\nThis tool is used to list transactions with optional filtering parameters within a date range of 31 days. This tool can also be used to list details of a transaction given the transaction ID.\n\n- The start_date and end_date should be specified in ISO8601 date and time format. Example dates: 1996-12-19T16:39:57-08:00, 1985-04-12T23:20:50.52Z, 1990-12-31T23:59:60Z\n- The transaction_status accepts the following 4 values:\n    1. \"D\" - represents denied transactions.\n    2. \"P\" - represents pending transactions.\n    3. \"S\" - represents successful transactions.\n    4. \"V\" - represents transactions that were reversed.\n- The transaction_id is the unique identifier for the transaction.\n",
+    "approved_at": "2026-10-30T19:00:52.471377Z",
+    "approval_id": "apr_dcd57bc3-813c-43b9-a7c5-42d67a4c9672"
+   },
+   "pay_order": {
+    "sha256": "af79cca3fbe17d19d5bbc57f1fa2d7c7747a7c8ac155bbbe82641ca1a8b16857",
+    "description": "\nCapture a payment for an order.\n\nThis tool is used to capture a payment for an order. It allows you to capture funds that have been authorized for a specific order but not yet captured.\n",
+    "approved_at": "2026-10-30T18:28:59.576406Z",
+    "approval_id": "apr_51bf84ce-1e8c-442e-aea1-19f78188c670"
+   },
+   "send_invoice": {
+    "sha256": "3ef4b51ec51a11729a29c78f0287ae197ebe7c93c8ea515423de41919572d9e7",
+    "description": "\nSend an invoice to the recipient(s).\n\nThis function sends a previously created invoice to its intended recipients.\n",
+    "approved_at": "2026-10-30T18:28:59.576406Z",
+    "approval_id": "apr_51bf84ce-1e8c-442e-aea1-19f78188c670"
+   },
+   "send_invoice_reminder": {
+    "sha256": "2393b7294f0bdbb3c620f4377c7ceb36160dddd6404e3d2c467d90a46c3233d2",
+    "description": "\nSend a reminder for an invoice.\n\nThis function sends a reminder for an invoice that has already been sent but hasn't been paid yet.\n",
+    "approved_at": "2026-10-30T18:28:59.576406Z",
+    "approval_id": "apr_51bf84ce-1e8c-442e-aea1-19f78188c670"
+   },
+   "show_product_details": {
+    "sha256": "322e0211dcb1e106e7d600e67b5b3a5ee457012bc4a5546bc5ea0de3140bb066",
+    "description": "\nList products from PayPal.\n\nThis function retrieves a list of products with optional pagination parameters.\n",
+    "approved_at": "2026-10-30T18:28:59.576406Z",
+    "approval_id": "apr_51bf84ce-1e8c-442e-aea1-19f78188c670"
+   },
+   "show_subscription_details": {
+    "sha256": "0af558fd8bdd16f9def3a168e9bbf2693775f21004dab2d8df775bece0eb323d",
+    "description": "\nShow subscription details from PayPal.\nThis function retrieves the details of a specific subscription using its ID.\nRequired parameters are: subscription_id (the ID of the subscription).\n",
+    "approved_at": "2026-10-30T18:28:59.576406Z",
+    "approval_id": "apr_51bf84ce-1e8c-442e-aea1-19f78188c670"
+   },
+   "show_subscription_plan_details": {
+    "sha256": "752e9e95268e5008b17f687c8a3a892e9ceec7fec9fc2ef0526b0200b03bf717",
+    "description": "\nShow subscription plan details from PayPal.\nThis function retrieves the details of a specific subscription plan using its ID.\nRequired parameters are: plan_id (the ID of the subscription plan).\n",
+    "approved_at": "2026-10-30T18:28:59.576406Z",
+    "approval_id": "apr_51bf84ce-1e8c-442e-aea1-19f78188c670"
+   },
+   "update_product": {
+    "sha256": "21b21114dd5097d397dfad69a73b62547f3e9f8eaf934bb6c75caf31fa1d67c4",
+    "description": "\nUpdate a product in PayPal.\n\nThis function updates an existing product using JSON Patch operations.\n",
+    "approved_at": "2026-10-30T18:28:59.576406Z",
+    "approval_id": "apr_51bf84ce-1e8c-442e-aea1-19f78188c670"
+   }
+  }
+ }
+}

@@ -18,4 +18,10 @@ px["escalate_timeout_sec"] = over["escalate_timeout_sec"]
 px["credentials"] = [c for c in (px.get("credentials") or []) if "paypal" not in c.get("host", "")] + over["credentials"]
 json.dump(px, open(f"{d}/proxy.json", "w"), indent=2)
 PY
+# The PayPal server's tool definitions, pinned by the operator once (30 Oct 2026,
+# @paypal/mcp 1.8.1, the tool list in the Dockerfile). Shipped so a fresh
+# deployment does not wait on a pin approval; OVARA still asks if a definition
+# differs from the pinned hash.
+mkdir -p "$DIR/var"
+[ -f "$DIR/var/mcp_pins.json" ] || cp "${OVARA_PAY_CONF:-/opt/ovara-pay/ovara}/mcp_pins.paypal.json" "$DIR/var/mcp_pins.json"
 echo "ovara ready in $DIR"
