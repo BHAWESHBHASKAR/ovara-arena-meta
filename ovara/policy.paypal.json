@@ -1,27 +1,131 @@
 {
   "_comment": "Rules merged in front of the strict profile that `ovara init` writes. Reads and sending invoices are allowed; anything that moves money or changes who gets paid pauses for a person; tool definitions are pinned.",
   "rules": [
-    { "action_type": "http.request", "environment": "*", "resource": "GET https://api.sandbox.paypal.com/*", "allow": true, "description": "PayPal reads" },
-    { "action_type": "http.request", "environment": "*", "resource": "GET https://api-m.sandbox.paypal.com/*", "allow": true, "description": "PayPal reads" },
-    { "action_type": "http.request", "environment": "*", "resource": "POST https://api.sandbox.paypal.com/v1/oauth2/token", "allow": true, "description": "token refresh carries no money" },
-    { "action_type": "http.request", "environment": "*", "resource": "POST https://api.sandbox.paypal.com/*", "allow": true, "description": "writes of the PayPal MCP server: it is the only process behind this proxy, so each POST is the request of a tool call OVARA already decided (mcp.tool_call)" },
-
-    { "action_type": "mcp.tool_call", "environment": "*", "resource": "mcp:stdio:paypal/list_invoices", "allow": true, "description": "read" },
-    { "action_type": "mcp.tool_call", "environment": "*", "resource": "mcp:stdio:paypal/get_invoice", "allow": true, "description": "read" },
-    { "action_type": "mcp.tool_call", "environment": "*", "resource": "mcp:stdio:paypal/get_order", "allow": true, "description": "read" },
-    { "action_type": "mcp.tool_call", "environment": "*", "resource": "mcp:stdio:paypal/list_disputes", "allow": true, "description": "read" },
-    { "action_type": "mcp.tool_call", "environment": "*", "resource": "mcp:stdio:paypal/get_dispute", "allow": true, "description": "read" },
-    { "action_type": "mcp.tool_call", "environment": "*", "resource": "mcp:stdio:paypal/list_transactions", "allow": true, "description": "read" },
-    { "action_type": "mcp.tool_call", "environment": "*", "resource": "mcp:stdio:paypal/get_refund", "allow": true, "description": "read" },
-
-    { "action_type": "mcp.tool_call", "environment": "*", "resource": "mcp:stdio:paypal/create_invoice", "allow": true, "description": "a draft invoice moves no money" },
-    { "action_type": "mcp.tool_call", "environment": "*", "resource": "mcp:stdio:paypal/send_invoice", "allow": true, "description": "asking a client to pay is routine" },
-    { "action_type": "mcp.tool_call", "environment": "*", "resource": "mcp:stdio:paypal/send_invoice_reminder", "allow": true, "description": "routine" },
-
-    { "action_type": "mcp.tool_call", "environment": "*", "resource": "mcp:stdio:paypal/create_refund", "escalate": true, "description": "money leaves the account: a person decides" },
-    { "action_type": "mcp.tool_call", "environment": "*", "resource": "mcp:stdio:paypal/cancel_sent_invoice", "escalate": true, "description": "cancels a receivable: a person decides" },
-    { "action_type": "mcp.tool_call", "environment": "*", "resource": "mcp:stdio:paypal/pay_order", "escalate": true, "description": "captures money: a person decides" },
-    { "action_type": "mcp.tool_call", "environment": "*", "resource": "mcp:stdio:paypal/accept_dispute_claim", "escalate": true, "description": "concedes a dispute: a person decides" },
-    { "action_type": "mcp.tool_call", "environment": "*", "resource": "mcp:stdio:paypal/cancel_subscription", "escalate": true, "description": "a person decides" }
+    {
+      "action_type": "http.request",
+      "environment": "*",
+      "resource": "GET https://api.sandbox.paypal.com/*",
+      "allow": true,
+      "description": "PayPal reads"
+    },
+    {
+      "action_type": "http.request",
+      "environment": "*",
+      "resource": "GET https://api-m.sandbox.paypal.com/*",
+      "allow": true,
+      "description": "PayPal reads"
+    },
+    {
+      "action_type": "http.request",
+      "environment": "*",
+      "resource": "POST https://api.sandbox.paypal.com/v1/oauth2/token",
+      "allow": true,
+      "description": "token refresh carries no money"
+    },
+    {
+      "action_type": "http.request",
+      "environment": "*",
+      "resource": "POST https://api.sandbox.paypal.com/*",
+      "allow": true,
+      "description": "writes of the PayPal MCP server: it is the only process behind this proxy, so each POST is the request of a tool call OVARA already decided (mcp.tool_call)"
+    },
+    {
+      "action_type": "mcp.tool_call",
+      "environment": "*",
+      "resource": "mcp:stdio:paypal/list_invoices",
+      "allow": true,
+      "description": "read"
+    },
+    {
+      "action_type": "mcp.tool_call",
+      "environment": "*",
+      "resource": "mcp:stdio:paypal/get_invoice",
+      "allow": true,
+      "description": "read"
+    },
+    {
+      "action_type": "mcp.tool_call",
+      "environment": "*",
+      "resource": "mcp:stdio:paypal/get_order",
+      "allow": true,
+      "description": "read"
+    },
+    {
+      "action_type": "mcp.tool_call",
+      "environment": "*",
+      "resource": "mcp:stdio:paypal/list_disputes",
+      "allow": true,
+      "description": "read"
+    },
+    {
+      "action_type": "mcp.tool_call",
+      "environment": "*",
+      "resource": "mcp:stdio:paypal/get_dispute",
+      "allow": true,
+      "description": "read"
+    },
+    {
+      "action_type": "mcp.tool_call",
+      "environment": "*",
+      "resource": "mcp:stdio:paypal/get_refund",
+      "allow": true,
+      "description": "read"
+    },
+    {
+      "action_type": "mcp.tool_call",
+      "environment": "*",
+      "resource": "mcp:stdio:paypal/create_invoice",
+      "allow": true,
+      "description": "a draft invoice moves no money"
+    },
+    {
+      "action_type": "mcp.tool_call",
+      "environment": "*",
+      "resource": "mcp:stdio:paypal/send_invoice",
+      "allow": true,
+      "description": "asking a client to pay is routine"
+    },
+    {
+      "action_type": "mcp.tool_call",
+      "environment": "*",
+      "resource": "mcp:stdio:paypal/send_invoice_reminder",
+      "allow": true,
+      "description": "routine"
+    },
+    {
+      "action_type": "mcp.tool_call",
+      "environment": "*",
+      "resource": "mcp:stdio:paypal/create_refund",
+      "escalate": true,
+      "description": "money leaves the account: a person decides"
+    },
+    {
+      "action_type": "mcp.tool_call",
+      "environment": "*",
+      "resource": "mcp:stdio:paypal/cancel_sent_invoice",
+      "escalate": true,
+      "description": "cancels a receivable: a person decides"
+    },
+    {
+      "action_type": "mcp.tool_call",
+      "environment": "*",
+      "resource": "mcp:stdio:paypal/pay_order",
+      "escalate": true,
+      "description": "captures money: a person decides"
+    },
+    {
+      "action_type": "mcp.tool_call",
+      "environment": "*",
+      "resource": "mcp:stdio:paypal/accept_dispute_claim",
+      "escalate": true,
+      "description": "concedes a dispute: a person decides"
+    },
+    {
+      "action_type": "mcp.tool_call",
+      "environment": "*",
+      "resource": "mcp:stdio:paypal/cancel_subscription",
+      "escalate": true,
+      "description": "a person decides"
+    }
   ]
 }

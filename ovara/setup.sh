@@ -7,7 +7,7 @@ mkdir -p "$DIR"
 [ -f "$DIR/policy.json" ] || ovara init "$DIR" >/dev/null
 python3 - "$DIR" <<'PY'
 import json, sys, os
-d = sys.argv[1]; here = os.path.dirname(os.path.abspath(__file__)) if "__file__" in globals() else "/opt/ovara-pay/ovara"
+d = sys.argv[1]
 here = os.environ.get("OVARA_PAY_CONF", "/opt/ovara-pay/ovara")
 pol = json.load(open(f"{d}/policy.json")); add = json.load(open(f"{here}/policy.paypal.json"))["rules"]
 mine = {(r["action_type"], r["resource"]) for r in add}
