@@ -1,0 +1,25 @@
+# Render blueprint: one Docker web service, nothing persistent.
+# Secrets are entered in the Render dashboard (sync: false), never here.
+# The free plan spins down after 15 minutes idle; the first request then
+# waits for a cold start (about a minute). A fresh instance re-seeds the sandbox.
+services:
+  - type: web
+    name: ovara-pay
+    runtime: docker
+    plan: free
+    region: oregon
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/state
+    envVars:
+      - key: PORT
+        value: "10000"
+      - key: PAYPAL_CLIENT_ID
+        sync: false
+      - key: PAYPAL_CLIENT_SECRET
+        sync: false
+      - key: META_API_KEY
+        sync: false
+      - key: DAILY_TASKS
+        value: "40"
+      - key: TASK_TOKEN_CAP
+        value: "200000"
