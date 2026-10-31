@@ -86,6 +86,12 @@ export interface ToolResult {
 
 type Waiter = { resolve: (v: unknown) => void; reject: (e: Error) => void; timer: NodeJS.Timeout };
 
+// A child's stderr can echo a request header or a token; nothing of that
+// goes into an error message.
+export function redactSecrets(s: string): string {
+  return s.replace(/Bearer\s+\S+/g, '[redacted]').replace(/[A-Za-z0-9+/_-]{40,}={0,2}/g, '[redacted]');
+}
+
 export class McpClient {
   private child?: ChildProcessWithoutNullStreams;
   private buf = '';
@@ -106,7 +112,7 @@ export class McpClient {
   }
 
   get lastStderr(): string {
-    return this.stderrTail.join('\n');
+    return redactSecrets(this.stderrTail.join('\n'));
   }
 
   async start(): Promise<void> {
@@ -129,7 +135,7 @@ export class McpClient {
       this.exited = true;
       for (const [, w] of this.waiting) {
         clearTimeout(w.timer);
-        w.reject(new Error(`MCP server ${this.label} exited (${code}): ${this.stderrTail.slice(-3).join(' | ')}`));
+        w.reject(new Error(`MCP server ${this.label} exited (${code}): ${redactSecrets(this.stderrTail.slice(-3).join(' | '))}`));
       }
       this.waiting.clear();
     });
@@ -186,13 +192,16 @@ export class McpClient {
     });
   }
 
+  // Cancelling a request tells the child; the wrapper's held approval (if the
+  // watch learned one) stays open at the gateway, so the caller closes it
+  // with `watch.held`. The rejection carries `cancelled` so it can tell.
   cancel(id: number, reason: string): void {
     this.notify('notifications/cancelled', { requestId: id, reason });
     const w = this.waiting.get(id);
     if (w) {
       this.waiting.delete(id);
       clearTimeout(w.timer);
-      w.reject(new Error(`cancelled: ${reason}`));
+      w.reject(Object.assign(new Error(`cancelled: ${reason}`), { cancelled: true }));
     }
   }
 
@@ -236,6 +245,9 @@ export class McpClient {
 // mcp:stdio:<server>/<tool> with context.arguments_sha256. Polling
 // GET /v1/approval/pending finds it; the first match is reported once.
 export class HeldWatch {
+  // the approval this watch found, kept so a stopped task can deny it
+  held?: PendingApproval;
+
   constructor(
     private readonly gw: Gateway,
     private readonly resource: string,
@@ -260,6 +272,7 @@ export class HeldWatch {
         const hit = found.find((a) => Date.parse(a.created_at) >= since) || found[0];
         if (hit && !stopped) {
           stopped = true;
+          this.held = hit;
           this.onHeld(hit);
           return;
         }

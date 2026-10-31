@@ -81,6 +81,6 @@ function Card({ a, decide }: { a: Approval; decide: DecideFn }) {
 }
 
 export function Approvals({ items, decide, reachable }: { items: Approval[]; decide: DecideFn; reachable: boolean }) {
-  if (!items.length) return <p className="empty">{reachable ? 'Nothing is waiting for you. Calls that move money stop here first.' : 'Approvals appear here once the API is reachable.'}</p>
+  if (!items.length) return <p className="empty">{reachable ? 'Nothing is waiting for you. Calls that move money stop here first.' : 'The approvals list is not available right now. It comes back once the API and the OVARA gateway answer again.'}</p>
   return <div className="approvals">{items.map(a => <Card key={a.id} a={a} decide={decide} />)}</div>
 }

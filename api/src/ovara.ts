@@ -3,7 +3,8 @@
 // (`env`, `approve -remember`, `log -verify-only`). The CLI is run with
 // execFile and an argument list, never through a shell.
 import { execFile } from 'node:child_process';
-import { readFile, rename, writeFile } from 'node:fs/promises';
+import { createReadStream } from 'node:fs';
+import { open, readFile, rename, stat, writeFile, type FileHandle } from 'node:fs/promises';
 import { connect } from 'node:net';
 import { isAbsolute, join } from 'node:path';
 import { config } from './config.js';
@@ -227,16 +228,42 @@ export interface ProxyReceipt {
   [k: string]: unknown;
 }
 
-// The proxy's HTTP receipts, newest last. Only the newest `n` lines are parsed.
-export async function proxyReceipts(n = 400): Promise<ProxyReceipt[]> {
+async function receiptsFile(): Promise<string> {
   const p = await proxyJson();
-  let text = '';
+  return inDir(p.receipts_file || 'var/receipts.jsonl');
+}
+
+// The last `n` lines of a file, read from its tail (about 600 bytes a line is
+// assumed; the read grows until it has enough lines or the whole file).
+async function tailLines(path: string, n: number): Promise<string[]> {
+  let fh: FileHandle;
   try {
-    text = await readFile(inDir(p.receipts_file || 'var/receipts.jsonl'), 'utf8');
+    fh = await open(path, 'r');
   } catch {
     return [];
   }
-  const lines = text.split('\n').filter(Boolean).slice(-n);
+  try {
+    const size = (await fh.stat()).size;
+    let bytes = Math.min(size, Math.max(64 * 1024, n * 600));
+    for (;;) {
+      const buf = Buffer.alloc(bytes);
+      const { bytesRead } = await fh.read(buf, 0, bytes, size - bytes);
+      const text = buf.subarray(0, bytesRead).toString('utf8');
+      const lines = text.split('\n');
+      // the first line is cut unless the read started at the file's start
+      if (bytes < size) lines.shift();
+      const full = lines.filter(Boolean);
+      if (full.length >= n || bytes >= size) return full.slice(-n);
+      bytes = Math.min(size, bytes * 4);
+    }
+  } finally {
+    await fh.close();
+  }
+}
+
+// The proxy's HTTP receipts, newest last. Only the newest `n` lines are read.
+export async function proxyReceipts(n = 400): Promise<ProxyReceipt[]> {
+  const lines = await tailLines(await receiptsFile(), n);
   const out: ProxyReceipt[] = [];
   for (const l of lines) {
     try {
@@ -246,6 +273,38 @@ export async function proxyReceipts(n = 400): Promise<ProxyReceipt[]> {
     }
   }
   return out;
+}
+
+// How many receipts the proxy has written. The file is only counted again when
+// its size changed.
+let countCache: { size: number; count: number } | undefined;
+
+export async function proxyReceiptCount(): Promise<number> {
+  const path = await receiptsFile();
+  let size: number;
+  try {
+    size = (await stat(path)).size;
+  } catch {
+    return 0;
+  }
+  if (countCache && countCache.size === size) return countCache.count;
+  let count = 0;
+  await new Promise<void>((done, fail) => {
+    const s = createReadStream(path);
+    let lastByte = 0x0a;
+    s.on('data', (chunk) => {
+      const b = chunk as Buffer;
+      for (let i = 0; i < b.length; i++) if (b[i] === 0x0a) count++;
+      if (b.length) lastByte = b[b.length - 1];
+    });
+    s.on('end', () => {
+      if (lastByte !== 0x0a) count++;
+      done();
+    });
+    s.on('error', fail);
+  }).catch(() => (count = 0));
+  countCache = { size, count };
+  return count;
 }
 
 export async function receiptPublicKey(): Promise<string> {

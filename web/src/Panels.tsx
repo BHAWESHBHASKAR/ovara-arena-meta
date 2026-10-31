@@ -77,9 +77,9 @@ export function Receipts({ receipts, integrity, verify }: { receipts: Receipt[];
       <div className="verify">
         <div className="verify-text">
           {res ? (
-            <><span className="strong">{res.ok ? 'Chain intact.' : 'Chain broken.'}</span> {res.count} decision{res.count === 1 ? '' : 's'} checked, each signed and linked to the one before.{res.detail && <span className="dim"> {res.detail}</span>}</>
+            <><span className="strong">{res.ok ? 'Receipts check out.' : 'Receipts do not check out.'}</span> {res.count} receipt{res.count === 1 ? '' : 's'}: gateway decision receipts signature-checked, proxy log hash chain verified as a whole.{res.detail && <span className="dim"> {res.detail}</span>}</>
           ) : (
-            <>Every decision is signed and linked to the one before it. Verify re-checks the whole chain.</>
+            <>Gateway decision receipts are signed and signature-checked; the proxy log's hash chain is verified as a whole by <code>ovara log -verify-only</code>. Verify runs both again.</>
           )}
           {err && <div className="err">Could not verify: {err}</div>}
           <div className="dim small">Public key <code title={pk}>{pk ? short(pk, 28) : 'not reported yet'}</code></div>
@@ -119,9 +119,10 @@ function RuleLine({ r }: { r: Rule }) {
   )
 }
 
-export function PolicyPanel({ policy, lastTaskId, draft, onDraft, onApply, onReset }: {
+export function PolicyPanel({ policy, lastTaskId, taskRunning, draft, onDraft, onApply, onReset }: {
   policy: Policy | null
   lastTaskId: string | null
+  taskRunning?: boolean
   draft: Draft | null
   onDraft: () => Promise<void>
   onApply: () => Promise<void>
@@ -135,10 +136,10 @@ export function PolicyPanel({ policy, lastTaskId, draft, onDraft, onApply, onRes
     <>
       <div className="draft-bar">
         <p className="dim">Turn the last incident into a rule. The drafter reads the task's feed and proposes one; OVARA validates it before you apply it.</p>
-        <button className="btn" disabled={!lastTaskId || !!busy} onClick={() => act('draft', onDraft)}>
+        <button className="btn" disabled={!lastTaskId || !!busy || !!taskRunning} onClick={() => act('draft', onDraft)}>
           {busy === 'draft' ? 'Drafting' : 'Draft a rule from this incident'}
         </button>
-        {lastTaskId && <div className="dim small">Incident: task <code>{short(lastTaskId, 20)}</code></div>}
+        {lastTaskId && <div className="dim small">Incident: task <code>{short(lastTaskId, 20)}</code>{taskRunning ? ' (wait for the running task to finish)' : ''}</div>}
       </div>
       {err && <div className="err">{err}</div>}
       {draft && (

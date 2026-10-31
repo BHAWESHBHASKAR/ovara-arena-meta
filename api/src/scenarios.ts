@@ -120,8 +120,18 @@ async function invoiceStatus(id: string): Promise<string> {
 // a mail) and drafts deleted, so the agent sees only this seed's data and what
 // it creates itself.
 async function clearSandbox(problems: string[]): Promise<void> {
-  const r = await paypal<{ items?: { id: string; status: string }[] }>('GET', '/v2/invoicing/invoices?page_size=100');
-  for (const inv of r.items || []) {
+  // every page of the list, read before anything is cancelled
+  const all: { id: string; status: string }[] = [];
+  for (let page = 1; page <= 50; page++) {
+    const r = await paypal<{ items?: { id: string; status: string }[]; total_items?: number }>(
+      'GET',
+      `/v2/invoicing/invoices?page_size=100&page=${page}&total_required=true`,
+    );
+    const items = r.items || [];
+    all.push(...items);
+    if (items.length < 100 || (typeof r.total_items === 'number' && all.length >= r.total_items)) break;
+  }
+  for (const inv of all) {
     try {
       if (OPEN.has(inv.status)) await paypal('POST', `/v2/invoicing/invoices/${inv.id}/cancel`, { send_to_invoicer: false, send_to_recipient: false });
       else if (inv.status === 'DRAFT') await paypal('DELETE', `/v2/invoicing/invoices/${inv.id}`);

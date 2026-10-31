@@ -10,6 +10,7 @@ import { Feed } from './feed.js';
 import {
   gateway,
   proxyOk,
+  proxyReceiptCount,
   proxyReceipts,
   receiptPublicKey,
   verifyChainCli,
@@ -29,6 +30,9 @@ const policy = new PolicyPanel();
 const state = {
   boot: 'starting' as 'starting' | 'ready' | 'degraded',
   bootError: '',
+  // what boot() decided, before the periodic gateway/proxy checks moved it
+  bootOutcome: undefined as 'ready' | 'degraded' | undefined,
+  linkError: '',
   gatewayOk: false,
   proxyOk: false,
   tokenOk: false,
@@ -102,7 +106,12 @@ function ruleWhy(rules: PolicyRule[], resource: string): string | undefined {
 }
 
 async function approvalsView() {
-  const [pending, rules] = await Promise.all([gateway.pending(), gateway.rules().catch(() => [] as PolicyRule[])]);
+  const [pending, rules] = await Promise.all([
+    gateway.pending().catch((e) => {
+      throw httpError(503, `the OVARA gateway did not answer: ${(e as Error).message}`);
+    }),
+    gateway.rules().catch(() => [] as PolicyRule[]),
+  ]);
   const receiptIds = await Promise.all(
     pending.map((a) =>
       gateway
@@ -152,8 +161,33 @@ async function approvalsView() {
 
 // --- receipts ---
 
+// The console polls GET /api/receipts every few seconds. The view is built at
+// most every 10 s (or when POST /api/receipts/verify asks for it); a build
+// signature-checks only the gateway receipts not checked before, a few at a
+// time, and reads only the tail of the proxy's receipts.jsonl.
+const RECEIPTS_EVERY_MS = 10000;
+const RECEIPTS_ROWS = 1000;
+const PROXY_TAIL = 200;
+const VERIFY_PER_BUILD = 50;
+
 const verified = new Map<string, boolean>();
 let lastChain: { ok: boolean; detail: string; at: number } | undefined;
+let receiptsCache: { at: number; rows: ReceiptRow[]; integrity: { ok: boolean; count: number; public_key: string } } | undefined;
+let receiptsBuilding: Promise<void> | undefined;
+
+interface ReceiptRow {
+  id: string;
+  at: string;
+  kind: string;
+  resource: string;
+  outcome: string;
+  approval_id?: string;
+  approval?: string;
+  http_status?: number;
+  signature_kind: string;
+  chain_ok: boolean | null;
+  source: string;
+}
 
 async function chainStatus() {
   if (!lastChain || Date.now() - lastChain.at > 60000) lastChain = { ...(await verifyChainCli()), at: Date.now() };
@@ -165,15 +199,27 @@ function gwOutcome(d: string): string {
 }
 
 async function receiptsView(n: number) {
-  const [gw, px, approvals, chain, key] = await Promise.all([
+  if (!receiptsCache || Date.now() - receiptsCache.at > RECEIPTS_EVERY_MS) {
+    if (!receiptsBuilding) receiptsBuilding = buildReceipts().finally(() => (receiptsBuilding = undefined));
+    // a stale view answers at once while a fresh one is built
+    if (receiptsCache) void receiptsBuilding.catch(() => undefined);
+    else await receiptsBuilding;
+  }
+  const c = receiptsCache!;
+  return { receipts: c.rows.slice(0, n), integrity: c.integrity };
+}
+
+async function buildReceipts(): Promise<void> {
+  const [gw, px, pxCount, approvals, chain, key] = await Promise.all([
     gateway.receipts().catch(() => [] as GatewayReceipt[]),
-    proxyReceipts(Math.max(400, n * 3)),
+    proxyReceipts(PROXY_TAIL),
+    proxyReceiptCount(),
     gateway.allApprovals().catch(() => [] as PendingApproval[]),
     chainStatus(),
     receiptPublicKey(),
   ]);
   const approvalOf = new Map(approvals.map((a) => [a.decision_id, a]));
-  const unverified = gw.filter((r) => !verified.has(r.receipt_id)).slice(-500);
+  const unverified = gw.filter((r) => !verified.has(r.receipt_id)).slice(-VERIFY_PER_BUILD);
   await Promise.all(
     unverified.map((r) =>
       gateway
@@ -182,7 +228,7 @@ async function receiptsView(n: number) {
         .catch(() => undefined),
     ),
   );
-  const rows = [
+  const rows: ReceiptRow[] = [
     ...gw.map((r) => {
       const a = approvalOf.get(r.decision_id);
       return {
@@ -213,9 +259,9 @@ async function receiptsView(n: number) {
       })),
   ]
     .sort((a, b) => Date.parse(b.at) - Date.parse(a.at))
-    .slice(0, n);
+    .slice(0, RECEIPTS_ROWS);
   const gwOk = gw.every((r) => verified.get(r.receipt_id) !== false);
-  return { receipts: rows, integrity: { ok: chain.ok && gwOk, count: gw.length + (await proxyReceipts(100000)).length, public_key: key } };
+  receiptsCache = { at: Date.now(), rows, integrity: { ok: chain.ok && gwOk, count: gw.length + pxCount, public_key: key } };
 }
 
 async function verifyAll() {
@@ -227,7 +273,9 @@ async function verifyAll() {
     if (!v.valid) bad++;
   }
   lastChain = { ...chain, at: Date.now() };
-  const px = (await proxyReceipts(100000)).length;
+  const px = await proxyReceiptCount();
+  // the next GET /api/receipts shows this result
+  receiptsCache = undefined;
   const ok = chain.ok && bad === 0 && (integ ? integ.passed : true);
   const detail = [
     `gateway: ${gw.length - bad} of ${gw.length} decision receipts have a valid signature (POST /v1/receipts/verify)`,
@@ -315,7 +363,7 @@ const route = (method: string, pattern: string, h: Handler) =>
 
 route('GET', '/api/state', async () => ({
   boot: state.boot,
-  ...(state.bootError ? { error: state.bootError } : {}),
+  ...(state.bootError || state.linkError ? { error: state.bootError || state.linkError } : {}),
   ovara: {
     gateway_ok: state.gatewayOk,
     proxy_ok: state.proxyOk,
@@ -348,7 +396,8 @@ route('POST', '/api/tasks/{id}/stop', async (_req, _res, [id]) => {
   if (t.status === 'queued') {
     t.status = 'stopped';
     t.ended_at = new Date().toISOString();
-    feed.push(t.id, 'done', { status: 'stopped', text: 'stopped before it started' });
+    // the task never ran, so the feed gets its one `task` line, already stopped
+    feed.push(t.id, 'task', { text: t.text, scenario: t.scenario, profile: t.profile, status: 'stopped', note: 'stopped before it started' });
   } else controllers.get(id)?.abort();
   return t;
 });
@@ -427,8 +476,11 @@ route('GET', '/api/replay', async () => {
 });
 
 // Not in the contract: the seed ids, and a fresh seed (`{"force": true}`
-// clears the sandbox's open invoices first).
+// clears the sandbox's open invoices first). Seeding writes to the PayPal
+// sandbox, so it always needs the API token, even where other writes do not.
 route('POST', '/api/seed', async (req) => {
+  if (!config.apiToken) throw httpError(403, 'the seed step is locked unless API_TOKEN is set');
+  if (req.headers.authorization !== `Bearer ${config.apiToken}`) throw httpError(401, 'API_TOKEN required: Authorization: Bearer <token>');
   const b = await readBody(req);
   state.seed = await seed(b.force === true);
   return { status: seedStatus(state.seed), seed: state.seed };
@@ -439,6 +491,10 @@ const server = createServer(async (req, res) => {
   const url = new URL(req.url || '/', 'http://localhost');
   const path = url.pathname;
   try {
+    if (path === '/healthz') {
+      const ok = state.boot === 'ready';
+      return send(res, ok ? 200 : 503, { ok });
+    }
     if (!path.startsWith('/api/')) {
       if (req.method !== 'GET' && req.method !== 'HEAD') throw httpError(405, 'method not allowed');
       return await serveStatic(req, res, path);
@@ -480,26 +536,39 @@ async function boot(): Promise<void> {
       .catch((e) => console.error(`seed: ${(e as Error).message}`));
   } else console.log('boot: PAYPAL_CLIENT_ID/SECRET not set; no seed, and "OVARA off" cannot run');
   if (!state.gatewayOk) {
-    state.boot = 'degraded';
+    state.boot = state.bootOutcome = 'degraded';
     state.bootError = `OVARA gateway not reachable at ${config.gatewayUrl}`;
     console.error(`boot: ${state.bootError}`);
     return;
   }
   try {
     await host.ensureWrapped();
-    state.boot = 'ready';
+    state.boot = state.bootOutcome = 'ready';
     console.log(`boot: ready; ${host.wrapped?.tools.length ?? 0} PayPal tools through OVARA`);
   } catch (e) {
-    state.boot = 'degraded';
+    state.boot = state.bootOutcome = 'degraded';
     state.bootError = `PayPal MCP server through OVARA: ${(e as Error).message}`;
     console.error(`boot: ${state.bootError}`);
   }
   void pump();
 }
 
+// After boot, a gateway or proxy that stops answering makes the deployment
+// degraded; when both answer again it goes back to what boot decided.
 setInterval(async () => {
   state.gatewayOk = await gateway.ok();
   state.proxyOk = await proxyOk();
+  if (!state.bootOutcome) return;
+  const down = [!state.gatewayOk && `gateway at ${config.gatewayUrl}`, !state.proxyOk && 'proxy'].filter(Boolean);
+  if (down.length) {
+    state.linkError = `OVARA ${down.join(' and ')} not reachable`;
+    if (state.boot !== 'degraded') console.error(`health: ${state.linkError}`);
+    state.boot = 'degraded';
+  } else {
+    if (state.linkError) console.log(`health: OVARA reachable again; ${state.bootOutcome}`);
+    state.linkError = '';
+    state.boot = state.bootOutcome;
+  }
 }, 15000).unref();
 
 server.listen(config.port, () => {

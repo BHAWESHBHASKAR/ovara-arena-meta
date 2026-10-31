@@ -7,6 +7,7 @@ import type { Feed, FeedItem } from './feed.js';
 import {
   argumentsSha256,
   HeldWatch,
+  matchesCall,
   McpClient,
   resultText,
   RpcFailure,
@@ -228,6 +229,7 @@ export class ToolHost {
   direct?: McpClient;
   pins: PinState = { state: 'starting' };
   private starting?: Promise<McpClient>;
+  private directToken = '';
 
   // The wrapped server: `ovara mcp wrap ... -- <PAYPAL_MCP_CMD>` inside
   // `ovara env`, with the PayPal placeholder token.
@@ -301,12 +303,17 @@ export class ToolHost {
 
   // "OVARA off": the same MCP server, run directly with the real token in its
   // environment and no proxy. Nothing checks its calls.
+  // The child keeps the token it was started with, so when PayPal has issued
+  // a new one since, the old child is stopped and a fresh one started.
   async ensureDirect(): Promise<McpClient> {
-    if (this.direct?.running) return this.direct;
-    const env: NodeJS.ProcessEnv = { ...process.env, PAYPAL_ACCESS_TOKEN: await paypalToken(), PAYPAL_ENVIRONMENT: 'SANDBOX' };
+    const token = await paypalToken();
+    if (this.direct?.running && this.directToken === token) return this.direct;
+    this.direct?.stop();
+    const env: NodeJS.ProcessEnv = { ...process.env, PAYPAL_ACCESS_TOKEN: token, PAYPAL_ENVIRONMENT: 'SANDBOX' };
     for (const k of ['HTTPS_PROXY', 'HTTP_PROXY', 'https_proxy', 'http_proxy', 'NODE_USE_ENV_PROXY', 'META_API_KEY', 'TAVILY_API_KEY', 'API_TOKEN', 'PAYPAL_CLIENT_SECRET']) delete env[k];
     const c = new McpClient('direct', config.mcpCmd, env);
     this.direct = c;
+    this.directToken = token;
     await c.start();
     await c.listTools();
     return c;
@@ -348,6 +355,7 @@ export interface CallRecord {
 }
 
 export class Agent {
+  // keyed `${task_id}:${arguments_sha256}`: two tasks can send the same arguments
   readonly calls = new Map<string, CallRecord>();
   private rules: PolicyRule[] = [];
 
@@ -356,8 +364,15 @@ export class Agent {
     readonly host: ToolHost,
   ) {}
 
-  callFor(sha: string | undefined): CallRecord | undefined {
-    return sha ? this.calls.get(sha) : undefined;
+  // The record of a call by its arguments' hash and, when known, its task.
+  // The gateway's approval carries only the hash, so without a task the
+  // newest record with that hash is the one.
+  callFor(sha: string | undefined, taskId?: string): CallRecord | undefined {
+    if (!sha) return undefined;
+    if (taskId) return this.calls.get(`${taskId}:${sha}`);
+    let found: CallRecord | undefined;
+    for (const [k, r] of this.calls) if (k.endsWith(`:${sha}`) && (!found || r.at >= found.at)) found = r;
+    return found;
   }
 
   async run(task: Task, signal: AbortSignal): Promise<void> {
@@ -456,7 +471,7 @@ export class Agent {
       untrusted_context: untrusted ? { source: untrusted.source, text: untrusted.text } : undefined,
       at: Date.now(),
     };
-    this.calls.set(sha, record);
+    this.calls.set(`${task.id}:${sha}`, record);
     if (this.calls.size > 500) this.calls.delete(this.calls.keys().next().value!);
     this.feed.push(task.id, 'call', { tool, arguments: args, arguments_sha256: sha });
 
@@ -476,6 +491,12 @@ export class Agent {
       result = await client.callTool(tool, args, { signal, watch });
     } catch (e) {
       if (!(e instanceof RpcFailure)) {
+        // stopped while OVARA held the call: close the question, so nobody
+        // approves it later with no task listening
+        if (signal.aborted && !off) {
+          await heldPushed;
+          await this.denyHeld(task, tool, resource, sha, held || watch?.held);
+        }
         this.feed.push(task.id, 'result', { tool, ok: false, summary: (e as Error).message.slice(0, 200) });
         return `Error: ${(e as Error).message}`;
       }
@@ -514,6 +535,29 @@ export class Agent {
       }
     }
     return text.length > 8000 ? text.slice(0, 8000) + '\n[cut]' : text || '(empty result)';
+  }
+
+  // A task stopped while its call is held: the pending approval is denied
+  // by its id. When the watch had not found it yet, the gateway's pending
+  // list is asked once more.
+  private async denyHeld(task: Task, tool: string, resource: string, sha: string, known: PendingApproval | undefined): Promise<void> {
+    let a = known;
+    if (!a) {
+      a = await gateway
+        .pending()
+        .then((all) => all.filter((x) => matchesCall(x, resource, sha)).sort((x, y) => Date.parse(y.created_at) - Date.parse(x.created_at))[0])
+        .catch(() => undefined);
+      if (a) await this.pushHeld(task.id, tool, resource, a);
+    }
+    if (!a) return;
+    try {
+      await gateway.deny(a.approval_id, 'task stopped');
+    } catch (e) {
+      // already answered, or the gateway is away: nothing to close
+      console.error(`deny ${a.approval_id} after stop: ${(e as Error).message}`);
+      return;
+    }
+    this.feed.push(task.id, 'decision', { tool, outcome: 'denied', approval_id: a.approval_id, rule: 'task stopped' });
   }
 
   private async pushHeld(taskId: string, tool: string, resource: string, a: PendingApproval): Promise<void> {

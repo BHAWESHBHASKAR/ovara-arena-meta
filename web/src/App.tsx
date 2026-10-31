@@ -51,6 +51,8 @@ export default function App() {
   const [reachable, setReachable] = useState<boolean | null>(null)
   const [tasks, setTasks] = useState<Task[]>([])
   const [approvals, setApprovals] = useState<Approval[]>([])
+  // false once GET /api/approvals fails: stale cards are cleared, not left clickable
+  const [approvalsOk, setApprovalsOk] = useState(true)
   const [receipts, setReceipts] = useState<Receipt[]>([])
   const [integrity, setIntegrity] = useState<Integrity | null>(null)
   const [policy, setPolicy] = useState<Policy | null>(null)
@@ -93,7 +95,9 @@ export default function App() {
 
   usePoll(() => api<State>('GET', '/api/state').then(s => { setState(s); setReachable(true) }).catch(e => { setReachable(false); throw e }), 5000)
   usePoll(() => api<Task[] | { tasks: Task[] }>('GET', '/api/tasks').then(t => setTasks(Array.isArray(t) ? t : t?.tasks || [])), 2000)
-  usePoll(() => api<Approval[] | { approvals: Approval[] }>('GET', '/api/approvals').then(a => setApprovals(Array.isArray(a) ? a : a?.approvals || [])), 1500)
+  usePoll(() => api<Approval[] | { approvals: Approval[] }>('GET', '/api/approvals')
+    .then(a => { setApprovals(Array.isArray(a) ? a : a?.approvals || []); setApprovalsOk(true) })
+    .catch(e => { setApprovals([]); setApprovalsOk(false); throw e }), 1500)
 
   const loadReceipts = useCallback(() => api<Receipt[] | { receipts: Receipt[]; integrity?: Integrity }>('GET', '/api/receipts?n=100').then(r => {
     if (Array.isArray(r)) { setReceipts(r); return }
@@ -162,7 +166,14 @@ export default function App() {
   const verify = () => api<VerifyResult>('POST', '/api/receipts/verify')
 
   const sortedTasks = useMemo(() => [...tasks].sort((a, b) => (atMs(b.started_at || 0) || 0) - (atMs(a.started_at || 0) || 0)), [tasks])
-  const lastTaskId = sortedTasks[0]?.id || [...live].reverse().find(i => i.kind === 'task')?.task_id || null
+  // the incident the drafter reads is the task that finished last, never one still running
+  const lastTaskId = useMemo(() => {
+    const finished = tasks.filter(t => t.status === 'done' || t.status === 'failed' || t.status === 'stopped')
+      .sort((a, b) => (atMs(b.ended_at || 0) || 0) - (atMs(a.ended_at || 0) || 0))
+    if (finished[0]) return finished[0].id
+    return [...live].reverse().find(i => i.kind === 'done')?.task_id || null
+  }, [tasks, live])
+  const taskRunning = tasks.some(t => t.status === 'running')
 
   const onDraft = () => api<Draft>('POST', '/api/policy/draft', { incident_task_id: lastTaskId }).then(setDraft)
   const onApply = () => {
@@ -255,7 +266,7 @@ export default function App() {
         </Panel>
 
         <Panel title={<>Approvals{approvals.length ? <span className="count held">{approvals.length} waiting</span> : null}</>} className="a-approvals">
-          <Approvals items={approvals} decide={decide} reachable={reachable !== false} />
+          <Approvals items={approvals} decide={decide} reachable={reachable !== false && approvalsOk} />
         </Panel>
 
         <Panel title="Queue" className="a-queue">
@@ -267,7 +278,7 @@ export default function App() {
         </Panel>
 
         <Panel title="Policy" className="a-policy" right={<span className="dim small">profile <code>{profile}</code></span>}>
-          <PolicyPanel policy={policy} lastTaskId={lastTaskId} draft={draft} onDraft={onDraft} onApply={onApply} onReset={onReset} />
+          <PolicyPanel policy={policy} lastTaskId={lastTaskId} taskRunning={taskRunning} draft={draft} onDraft={onDraft} onApply={onApply} onReset={onReset} />
         </Panel>
       </main>
 
