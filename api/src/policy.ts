@@ -182,6 +182,36 @@ Propose the smallest set of rules (one to three) that would have stopped the har
     }
     return this.view();
   }
+
+  // Takes every drafted rule out of policy.json and puts back the PayPal rule
+  // it replaced (the escalate on cancel_sent_invoice, for example), so a
+  // deployment can be returned to its shipped policy without a restart.
+  async reset(): Promise<{ profile: Profile; rules: ApiRule[]; removed: number }> {
+    const doc = await readPolicyFile();
+    const kept = doc.rules.filter((r) => !this.drafted.has(ruleKey(r)));
+    const removed = doc.rules.length - kept.length;
+    let paypal: PolicyRule[] = [];
+    try {
+      paypal = (JSON.parse(await readFile(join(config.payConfDir, 'policy.paypal.json'), 'utf8')) as { rules: PolicyRule[] }).rules;
+    } catch {
+      /* no PayPal rules to restore */
+    }
+    const present = new Set(kept.map(ruleKey));
+    const restore = paypal.filter((r) => this.drafted.has(ruleKey(r)) && !present.has(ruleKey(r)));
+    const rules = [...restore, ...kept];
+    const v = await gateway.validate({ ...doc, rules });
+    if (!v.valid) throw Object.assign(new Error(`OVARA refused the policy: ${(v.errors || []).join('; ')}`), { status: 409 });
+    await writePolicyFile({ ...doc, rules });
+    this.drafted.clear();
+    for (const d of this.drafts.values()) delete d.applied_at;
+    await this.save();
+    for (let i = 0; i < 20; i++) {
+      const live = await gateway.rules();
+      if (!live.some((r) => String(r.description || '').startsWith('[drafted]'))) break;
+      await new Promise((r) => setTimeout(r, 300));
+    }
+    return { ...(await this.view()), removed };
+  }
 }
 
 function apiRule(r: PolicyRule, origin: ApiRule['origin']): ApiRule {

@@ -211,3 +211,6 @@ details.f-row[open] > summary .f-kind::after { transform: rotate(90deg); }
 
 .notice { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); max-width: calc(100vw - 32px); background: var(--raise); border: 1px solid var(--line-2); border-radius: 8px; padding: 9px 14px; font-size: 13px; z-index: 30; box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5); }
 .notice.bad { border-color: #444; }
+
+.field-label { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.btn.small { height: 22px; padding: 0 8px; font-size: 12px; }

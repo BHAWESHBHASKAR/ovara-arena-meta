@@ -119,16 +119,17 @@ function RuleLine({ r }: { r: Rule }) {
   )
 }
 
-export function PolicyPanel({ policy, lastTaskId, draft, onDraft, onApply }: {
+export function PolicyPanel({ policy, lastTaskId, draft, onDraft, onApply, onReset }: {
   policy: Policy | null
   lastTaskId: string | null
   draft: Draft | null
   onDraft: () => Promise<void>
   onApply: () => Promise<void>
+  onReset: () => Promise<void>
 }) {
-  const [busy, setBusy] = useState<'' | 'draft' | 'apply'>('')
+  const [busy, setBusy] = useState<'' | 'draft' | 'apply' | 'reset'>('')
   const [err, setErr] = useState('')
-  const act = (k: 'draft' | 'apply', fn: () => Promise<void>) => { setBusy(k); setErr(''); fn().catch(e => setErr(String(e?.message || e))).finally(() => setBusy('')) }
+  const act = (k: 'draft' | 'apply' | 'reset', fn: () => Promise<void>) => { setBusy(k); setErr(''); fn().catch(e => setErr(String(e?.message || e))).finally(() => setBusy('')) }
   const rules = policy?.rules || []
   return (
     <>
@@ -152,7 +153,11 @@ export function PolicyPanel({ policy, lastTaskId, draft, onDraft, onApply }: {
           </div>
         </div>
       )}
-      <div className="field-label">Rules in force {rules.length ? <span className="dim">({rules.length})</span> : null}</div>
+      <div className="field-label">Rules in force {rules.length ? <span className="dim">({rules.length})</span> : null}
+        {rules.some(r => r.origin === 'drafted') && (
+          <button className="btn small" disabled={!!busy} onClick={() => act('reset', onReset)}>{busy === 'reset' ? 'Removing' : 'Remove drafted rules'}</button>
+        )}
+      </div>
       {!rules.length && <p className="empty">No policy loaded yet.</p>}
       <ul className="rules">{rules.map((r, i) => <RuleLine key={i} r={r} />)}</ul>
     </>

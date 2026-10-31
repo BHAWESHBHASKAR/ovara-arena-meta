@@ -173,6 +173,11 @@ export default function App() {
       say('Rule applied. Run the same scenario again to see it.')
     })
   }
+  const onReset = () => api<Policy>('POST', '/api/policy/reset').then(p => {
+    if (p && Array.isArray(p.rules)) setPolicy(p); else loadPolicy().catch(() => {})
+    setDraft(null)
+    say('Drafted rules removed; the shipped PayPal policy is back.')
+  })
 
   const status = reachable === false ? { word: 'API unreachable', cls: 'down' }
     : !state ? { word: 'Connecting', cls: 'wait' }
@@ -262,7 +267,7 @@ export default function App() {
         </Panel>
 
         <Panel title="Policy" className="a-policy" right={<span className="dim small">profile <code>{profile}</code></span>}>
-          <PolicyPanel policy={policy} lastTaskId={lastTaskId} draft={draft} onDraft={onDraft} onApply={onApply} />
+          <PolicyPanel policy={policy} lastTaskId={lastTaskId} draft={draft} onDraft={onDraft} onApply={onApply} onReset={onReset} />
         </Panel>
       </main>
 

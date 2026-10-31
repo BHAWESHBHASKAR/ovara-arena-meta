@@ -412,6 +412,7 @@ route('POST', '/api/policy/draft', async (req) => {
 });
 
 route('POST', '/api/policy/draft/{id}/apply', async (_req, _res, [id]) => policy.apply(id));
+route('POST', '/api/policy/reset', async () => policy.reset());
 
 route('GET', '/api/replay', async () => {
   // web/public is the recorded source; web/dist has the copy the build made
