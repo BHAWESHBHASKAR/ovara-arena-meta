@@ -70,6 +70,8 @@ export interface ArenaDeps {
   feed: Feed;
   enqueue: (text: string, scenario: string | undefined, profile: Profile, inbound: Inbound) => Task;
   task: (id: string) => Task | undefined;
+  /** true once the daily task cap is spent; the arena checks it before paying for an attack */
+  capReached?: () => boolean;
   setSeed: (s: SeedState | undefined) => void;
 }
 
@@ -182,6 +184,10 @@ export class Arena {
         const n = again.length ? again.length : rounds;
         this.state.plan = { rounds: n, profile, done: 0 };
         for (let i = 0; i < n && !this.stopRequested; i++) {
+          if (this.deps.capReached?.()) {
+            console.error('arena: the daily task cap is reached; stopping before the next attack');
+            break;
+          }
           await this.round(profile, again[i], manual);
           this.state.plan!.done = i + 1;
         }

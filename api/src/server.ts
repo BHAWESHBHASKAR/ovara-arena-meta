@@ -31,6 +31,7 @@ const arena = new Arena({
   feed,
   enqueue: (text, scenario, profile, inbound) => enqueue(text, scenario, profile, inbound),
   task: (id) => tasks.find((t) => t.id === id),
+  capReached: () => daily.day === new Date().toISOString().slice(0, 10) && daily.count >= config.dailyTasks,
   setSeed: (s) => {
     if (s) state.seed = s;
   },
@@ -409,7 +410,8 @@ route('POST', '/api/arena/run', async (req) => {
   const b = await readBody(req);
   const n = Math.max(1, Math.min(20, Number(b.rounds) || 3));
   const profile: Profile = b.profile === 'observe' ? 'observe' : 'strict';
-  const replay = Array.isArray(b.replay) ? b.replay.filter((x: unknown): x is string => typeof x === 'string') : undefined;
+  // dedupe and cap a replay list too, or a long list of one id would run thousands of rounds
+  const replay = Array.isArray(b.replay) ? [...new Set(b.replay.filter((x: unknown): x is string => typeof x === 'string'))].slice(0, 20) : undefined;
   const s = arena.start(n, profile, replay, b.operator === 'person');
   return { running: s.running, plan: s.plan };
 });

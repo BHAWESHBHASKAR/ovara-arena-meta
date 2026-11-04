@@ -18,7 +18,9 @@ const W = 900;
 const H = 640;
 
 function esc(s: string): string {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  // drop characters XML forbids (sharp's SVG parser rejects them), then escape
+  // eslint-disable-next-line no-control-regex
+  return s.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\uFFFE\uFFFF]/g, '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
 // splits text into lines of at most n characters, on spaces
