@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import type React from 'react'
 import type { ArenaData, FeedItem, Round } from './types'
 import { imageSrc } from './data'
 import { GITHUB_URL } from './router'
@@ -21,13 +22,34 @@ function figureExists(url: string): Promise<boolean> {
   return figCache.get(url)!
 }
 
+// The Hairline page carries its own bench (slider, theme, play, captions).
+// On the site only the drawing shows: the frame is same-origin, so a small
+// stylesheet hides the bench and lets the stage fill the frame.
+const FIGURE_CSS = `
+  html, body { overflow: hidden !important; }
+  body { padding: 0 !important; min-height: 0 !important; height: 100vh; background: transparent !important; }
+  main { max-width: none !important; height: 100%; display: grid; place-items: center; }
+  .plate { border: 0 !important; border-radius: 0 !important; width: 100%; }
+  .controls, #means, #rules, #name, #read { display: none !important; }
+`
+function cleanFigure(e: React.SyntheticEvent<HTMLIFrameElement>) {
+  try {
+    const doc = e.currentTarget.contentDocument
+    if (!doc || doc.getElementById('site-embed')) return
+    const st = doc.createElement('style')
+    st.id = 'site-embed'
+    st.textContent = FIGURE_CSS
+    doc.head.appendChild(st)
+  } catch { /* not same-origin: leave the bench as it is */ }
+}
+
 function FigureSlot({ name, title, className }: { name: string; title: string; className?: string }) {
   const file = `${BASE}figures/hairline-${name}.html`
   const [ok, setOk] = useState<boolean | null>(null)
   useEffect(() => { figureExists(file).then(setOk) }, [file])
   return (
     <div className={`figure-slot ${className || ''}`}>
-      {ok ? <iframe src={`${file}?embed=1`} title={title} loading="lazy" /> : <div className="figure-ph" aria-hidden="true">{ok === null ? '' : 'Figure'}</div>}
+      {ok ? <iframe src={`${file}?theme=light&play=1`} title={title} loading="lazy" onLoad={cleanFigure} /> : <div className="figure-ph" aria-hidden="true">{ok === null ? '' : 'Figure'}</div>}
     </div>
   )
 }
