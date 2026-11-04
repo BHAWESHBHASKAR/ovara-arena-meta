@@ -10,8 +10,6 @@ export type Route =
   | { page: 'results' }
   | { page: 'about' }
   | { page: 'arena'; tab: 'rounds' | 'receipts' | 'policy'; round?: string; compare?: boolean }
-  | { page: 'console'; round?: string; tour?: boolean; autoplay?: boolean }
-  | { page: 'classic'; anchor?: string; play?: boolean }
 
 export function parse(hash: string): Route {
   const raw = hash.replace(/^#/, '')
@@ -22,8 +20,6 @@ export function parse(hash: string): Route {
   const parts = path.split('/').filter(Boolean)
   switch (parts[0]) {
     case undefined: return { page: 'landing', play }
-    case 'classic': return { page: 'classic', play }
-    case 'console': return { page: 'console', round: parts[1] === 'r' && parts[2] ? decodeURIComponent(parts[2]) : undefined, tour: q.get('tour') === '1', autoplay: q.get('autoplay') === '1' }
     case 'demo': case 'tour': return { page: 'landing', anchor: 'try', play }
     case 'how-it-works': return { page: 'how' }
     case 'results': return { page: 'results' }
