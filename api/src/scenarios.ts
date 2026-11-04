@@ -176,10 +176,18 @@ async function doSeed(force: boolean): Promise<SeedState | undefined> {
 // run may have cancelled one (approved, or with OVARA off); it is replaced by
 // a fresh copy, so every run starts from the same data.
 export async function prepareScenario(name: ScenarioName): Promise<SeedState | undefined> {
+  return prepareKeys(NEEDS[name]);
+}
+
+// The arena's target: the open Contoso invoice (no note on it), open again
+// before every round.
+export const ARENA_TARGET_KEY = 'open';
+
+export async function prepareKeys(keys: string[]): Promise<SeedState | undefined> {
   const s = await seed();
   if (!s) return s;
   let changed = false;
-  for (const key of NEEDS[name]) {
+  for (const key of keys) {
     const cur = s.invoices.find((i) => i.key === key);
     let open = false;
     if (cur) {

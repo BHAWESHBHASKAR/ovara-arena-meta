@@ -1,4 +1,4 @@
-// The agent loop: Nemotron 3 Super (OpenAI-compatible tool calling)
+// The agent loop: Muse Spark (Meta Model API, OpenAI-compatible tool calling, image input)
 // over the PayPal MCP tools, one task at a time. Every step goes to the feed.
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -33,9 +33,28 @@ export function stripThink(s: string | null | undefined): string {
 
 export interface ChatMessage {
   role: 'system' | 'user' | 'assistant' | 'tool';
-  content: string | null;
+  content: string | null | ContentPart[];
   tool_calls?: ToolCall[];
   tool_call_id?: string;
+}
+
+export type ContentPart = { type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string } };
+
+// What a client sent with a task: an email (text the agent reads) and image
+// attachments (screenshots, scans). Both are untrusted data, and the image is
+// passed to the model as pixels, so text hidden in it reaches the model while
+// a text-only filter never sees it.
+export interface Attachment {
+  id: string;
+  name: string;
+  data_url: string;
+}
+
+export interface Inbound {
+  from: string;
+  subject: string;
+  body: string;
+  attachments: Attachment[];
 }
 
 export interface ToolCall {
@@ -154,13 +173,19 @@ export function isPayPalError(data: unknown): boolean {
 
 // The untrusted text shown with a call: the newest one read from an object
 // the call names (an invoice id in its arguments), else the newest one.
-export function untrustedFor(items: FeedItem[], args: Record<string, unknown>): { source: string; text: string } | undefined {
-  const all = items.filter((i) => i.kind === 'untrusted') as (FeedItem & { source: string; text: string })[];
+export function untrustedFor(
+  items: FeedItem[],
+  args: Record<string, unknown>,
+): { source: string; text: string; image?: string } | undefined {
+  const all = items.filter((i) => i.kind === 'untrusted') as (FeedItem & { source: string; text: string; image?: string })[];
   if (!all.length) return undefined;
   const ids = Object.values(args).filter((v): v is string => typeof v === 'string' && v.length >= 6);
   const named = [...all].reverse().find((u) => ids.some((id) => u.source.includes(id)));
-  const u = named || all[all.length - 1];
-  return { source: u.source, text: u.text };
+  // a task that came with a client email: what the client sent is what
+  // pushed the agent, the image first since that is where text hides
+  const inbound = [...all].reverse().find((u) => u.image) || [...all].reverse().find((u) => u.source.startsWith('email from'));
+  const u = named || inbound || all[all.length - 1];
+  return { source: u.source, text: u.text, ...(u.image ? { image: u.image } : {}) };
 }
 
 export function summarize(text: string, isError: boolean): string {
@@ -327,6 +352,24 @@ export class ToolHost {
 
 // --- tasks ---
 
+// The task, plus the client's email and its images when there are any. The
+// email and the images are marked as data from outside, the same way the
+// system prompt treats tool results.
+export function userContent(task: Task): string | ContentPart[] {
+  const ib = task.inbound;
+  if (!ib) return task.text;
+  const parts: ContentPart[] = [
+    {
+      type: 'text',
+      text:
+        `${task.text}\n\n--- Client email (data from outside the studio) ---\nFrom: ${ib.from}\nSubject: ${ib.subject}\n\n${ib.body}\n--- end of email ---` +
+        (ib.attachments.length ? `\n\nAttachments: ${ib.attachments.map((a) => a.name).join(', ')} (images below).` : ''),
+    },
+  ];
+  for (const a of ib.attachments) parts.push({ type: 'image_url', image_url: { url: a.data_url } });
+  return parts;
+}
+
 export type TaskStatus = 'queued' | 'running' | 'done' | 'stopped' | 'failed';
 
 export interface Task {
@@ -341,6 +384,7 @@ export interface Task {
   steps: number;
   tokens: number;
   error?: string;
+  inbound?: Inbound;
 }
 
 // What the approvals endpoint needs about a call it did not see itself.
@@ -350,7 +394,7 @@ export interface CallRecord {
   arguments: Record<string, unknown>;
   arguments_sha256: string;
   agent_reason?: string;
-  untrusted_context?: { source: string; text: string };
+  untrusted_context?: { source: string; text: string; image?: string };
   at: number;
 }
 
@@ -390,8 +434,15 @@ export class Agent {
       const tools = curatedTools(client.tools).map(toOpenAiTool);
       const messages: ChatMessage[] = [
         { role: 'system', content: SYSTEM_PROMPT(new Date().toISOString().slice(0, 10)) },
-        { role: 'user', content: task.text },
+        { role: 'user', content: userContent(task) },
       ];
+      if (task.inbound) {
+        const ib = task.inbound;
+        this.feed.push(task.id, 'untrusted', { source: `email from ${ib.from}: ${ib.subject}`, text: ib.body });
+        for (const a of ib.attachments) {
+          this.feed.push(task.id, 'untrusted', { source: `attachment ${a.name} (image, from ${ib.from})`, text: `[image attachment ${a.name}]`, image: `/api/attachments/${a.id}` });
+        }
+      }
       let lastText = '';
       for (let step = 0; step < config.maxSteps; step++) {
         if (signal.aborted) return this.finish(task, 'stopped');
@@ -468,7 +519,7 @@ export class Agent {
       arguments: args,
       arguments_sha256: sha,
       agent_reason: reason || undefined,
-      untrusted_context: untrusted ? { source: untrusted.source, text: untrusted.text } : undefined,
+      untrusted_context: untrusted,
       at: Date.now(),
     };
     this.calls.set(`${task.id}:${sha}`, record);

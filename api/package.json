@@ -5,7 +5,9 @@
   "type": "module",
   "description": "API and agent loop for OVARA in front of PayPal's MCP server",
   "license": "Apache-2.0",
-  "engines": { "node": ">=22" },
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "dev": "tsx watch src/server.ts",
@@ -16,5 +18,8 @@
     "@types/node": "^22.10.0",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0"
+  },
+  "dependencies": {
+    "sharp": "^0.34.4"
   }
 }

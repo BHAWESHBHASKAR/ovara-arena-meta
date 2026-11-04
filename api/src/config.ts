@@ -41,8 +41,9 @@ export const config = {
 
   metaKey: process.env.META_API_KEY || '',
   metaBase: (process.env.META_BASE_URL || 'https://api.meta.ai/v1').replace(/\/$/, ''),
-  agentModel: process.env.AGENT_MODEL || 'nvidia/nemotron-3-super-120b-a12b',
-  drafterModel: process.env.DRAFTER_MODEL || 'nvidia/Nemotron-3-Ultra-550b-a55b',
+  agentModel: process.env.AGENT_MODEL || 'meta-models/muse-spark-open',
+  drafterModel: process.env.DRAFTER_MODEL || 'meta-models/muse-spark-open',
+  attackerModel: process.env.ATTACKER_MODEL || 'meta-models/muse-spark-open',
 
   maxSteps: num('MAX_STEPS', 12),
   dailyTasks: num('DAILY_TASKS', 60),

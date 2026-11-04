@@ -1,5 +1,5 @@
 // The policy panel: the profile switch, the rules with where each came from,
-// and the rule drafter (Nemotron 3 Ultra reads an incident and proposes
+// and the rule drafter (Muse Spark reads an incident and proposes
 // OVARA rules; OVARA validates them; a person applies them).
 import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';

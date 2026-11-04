@@ -4,7 +4,8 @@ import { createReadStream } from 'node:fs';
 import { readFile, stat } from 'node:fs/promises';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { extname, join, normalize, resolve } from 'node:path';
-import { Agent, ruleFor, ToolHost, type Profile, type Task } from './agent.js';
+import { Agent, ruleFor, ToolHost, type Inbound, type Profile, type Task } from './agent.js';
+import { Arena } from './arena.js';
 import { config } from './config.js';
 import { Feed } from './feed.js';
 import {
@@ -26,6 +27,14 @@ const feed = new Feed();
 const host = new ToolHost();
 const agent = new Agent(feed, host);
 const policy = new PolicyPanel();
+const arena = new Arena({
+  feed,
+  enqueue: (text, scenario, profile, inbound) => enqueue(text, scenario, profile, inbound),
+  task: (id) => tasks.find((t) => t.id === id),
+  setSeed: (s) => {
+    if (s) state.seed = s;
+  },
+});
 
 const state = {
   boot: 'starting' as 'starting' | 'ready' | 'degraded',
@@ -46,7 +55,7 @@ const controllers = new Map<string, AbortController>();
 let running = false;
 const daily = { day: '', count: 0 };
 
-function enqueue(text: string, scenario?: string): Task {
+function enqueue(text: string, scenario?: string, profile?: Profile, inbound?: Inbound): Task {
   const today = new Date().toISOString().slice(0, 10);
   if (daily.day !== today) Object.assign(daily, { day: today, count: 0 });
   if (daily.count >= config.dailyTasks) throw httpError(429, `the daily task cap (${config.dailyTasks}) is reached`);
@@ -55,7 +64,8 @@ function enqueue(text: string, scenario?: string): Task {
     id: `task_${randomUUID().slice(0, 8)}`,
     text,
     scenario,
-    profile: policy.profile,
+    profile: profile || policy.profile,
+    ...(inbound ? { inbound } : {}),
     status: 'queued',
     created_at: new Date().toISOString(),
     started_at: null,
@@ -371,11 +381,49 @@ route('GET', '/api/state', async () => ({
     ...(host.pins.approval_id && host.pins.state === 'pending' ? { pins_approval_id: host.pins.approval_id } : {}),
   },
   paypal: { sandbox: true, token_ok: state.tokenOk, seed: seedStatus(state.seed) },
-  models: { agent: config.agentModel, drafter: config.drafterModel },
+  models: { agent: config.agentModel, drafter: config.drafterModel, attacker: config.attackerModel },
   profile: policy.profile,
 }));
 
-route('GET', '/api/tasks', async () => tasks.map(({ tokens, ...t }) => (void tokens, t)));
+route('GET', '/api/tasks', async () =>
+  tasks.map(({ tokens, inbound, ...t }) => (
+    void tokens,
+    { ...t, ...(inbound ? { inbound: { ...inbound, attachments: inbound.attachments.map((a) => ({ id: a.id, name: a.name, url: `/api/attachments/${a.id}` })) } } : {}) }
+  )),
+);
+
+// --- arena ---
+
+route('GET', '/api/arena', async () => {
+  await arena.load();
+  return {
+    running: arena.state.running,
+    plan: arena.state.plan ?? null,
+    models: { attacker: config.attackerModel, agent: config.agentModel, drafter: config.drafterModel },
+    summary: arena.summary(),
+    rounds: arena.state.rounds.map((r) => ({ ...r, image_url: r.image_id ? `/api/attachments/${r.image_id}` : null })),
+  };
+});
+
+route('POST', '/api/arena/run', async (req) => {
+  const b = await readBody(req);
+  const n = Math.max(1, Math.min(20, Number(b.rounds) || 3));
+  const profile: Profile = b.profile === 'observe' ? 'observe' : 'strict';
+  const s = arena.start(n, profile);
+  return { running: s.running, plan: s.plan };
+});
+
+route('POST', '/api/arena/stop', async () => {
+  arena.stop();
+  return { stopping: true };
+});
+
+route('GET', '/api/attachments/{id}', async (_req, res, [id]) => {
+  const png = await arena.image(id);
+  if (!png) throw httpError(404, 'no such attachment');
+  res.writeHead(200, { 'Content-Type': 'image/png', 'Content-Length': png.length, 'Cache-Control': 'public, max-age=86400' });
+  res.end(png);
+});
 
 route('POST', '/api/tasks', async (req) => {
   const b = await readBody(req);
