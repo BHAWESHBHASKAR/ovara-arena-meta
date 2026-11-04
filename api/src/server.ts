@@ -410,7 +410,7 @@ route('POST', '/api/arena/run', async (req) => {
   const n = Math.max(1, Math.min(20, Number(b.rounds) || 3));
   const profile: Profile = b.profile === 'observe' ? 'observe' : 'strict';
   const replay = Array.isArray(b.replay) ? b.replay.filter((x: unknown): x is string => typeof x === 'string') : undefined;
-  const s = arena.start(n, profile, replay);
+  const s = arena.start(n, profile, replay, b.operator === 'person');
   return { running: s.running, plan: s.plan };
 });
 

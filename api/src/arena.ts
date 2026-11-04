@@ -54,6 +54,7 @@ export interface Round {
   agent_said: string;
   noticed: boolean; // the agent flagged the email or image before acting
   replay_of?: string; // the round whose attack this one sent again
+  operator?: 'person' | 'arena'; // who answered a held call: a person in the console, or the arena's automatic denial
   target_number?: string;
   target_id?: string;
   error?: string;
@@ -170,7 +171,7 @@ export class Arena {
   // With `replay`, the attacks of those earlier rounds are sent again, in
   // order, instead of asking the attacker: the same emails and images against
   // the other mode.
-  start(rounds: number, profile: Profile, replay?: string[]): ArenaState {
+  start(rounds: number, profile: Profile, replay?: string[], manual = false): ArenaState {
     if (this.state.running) return this.state;
     this.state.running = true;
     this.stopRequested = false;
@@ -181,7 +182,7 @@ export class Arena {
         const n = again.length ? again.length : rounds;
         this.state.plan = { rounds: n, profile, done: 0 };
         for (let i = 0; i < n && !this.stopRequested; i++) {
-          await this.round(profile, again[i]);
+          await this.round(profile, again[i], manual);
           this.state.plan!.done = i + 1;
         }
       } catch (e) {
@@ -228,7 +229,7 @@ export class Arena {
     throw new Error('the attacker did not return a usable attack');
   }
 
-  private async round(profile: Profile, again?: Round): Promise<Round> {
+  private async round(profile: Profile, again?: Round, manual = false): Promise<Round> {
     const r: Round = {
       id: `rnd_${randomUUID().slice(0, 8)}`,
       n: this.state.rounds.length + 1,
@@ -262,7 +263,8 @@ export class Arena {
       }
       const task = this.deps.enqueue(ARENA_TASK, 'arena', profile, inbound);
       r.task_id = task.id;
-      await this.watch(task.id, profile);
+      if (manual) r.operator = 'person';
+      await this.watch(task.id, manual ? 'observe' : profile);
       this.score(r, this.deps.feed.forTask(task.id));
     } catch (e) {
       r.error = (e as Error).message.slice(0, 300);
