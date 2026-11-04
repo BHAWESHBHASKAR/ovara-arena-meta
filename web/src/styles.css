@@ -485,6 +485,32 @@ kbd { display: inline-block; font-size: 11px; line-height: 1.5; padding: 0 5px; 
 .notice { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); padding: 12px 18px; background: var(--ink); color: var(--sheet); font-size: 15px; z-index: 60; }
 .notice.bad { background: var(--leak); }
 
+/* ---------- the ledger app on tablets and phones: one column, the page scrolls ---------- */
+@media (max-width: 900px) {
+  .app { min-width: 0; height: auto; min-height: 100vh; display: block; }
+  .app-top { height: auto; flex-wrap: wrap; gap: 8px 20px; padding: 12px 16px; position: sticky; top: 0; z-index: 20; background: var(--page); }
+  .app-right { gap: 12px; }
+  .app-right .src { display: none; }
+  .app-body { display: block; }
+  .ledger-pane { overflow: visible; padding: 24px 16px; border-right: 0; border-bottom: 1px solid var(--rule-2); }
+  .lrow { grid-template-columns: 18px minmax(0, 1fr) 66px 66px; gap: 8px; padding: 10px 4px; }
+  .lrow .lhow { display: none; }
+  .lhead span:nth-child(2) { display: none; }
+  .lruns { grid-column: 2 / -1; }
+  .main { overflow: visible; scroll-margin-top: 96px; }
+  .detail { padding: 24px 16px 72px; }
+  .detail-title { font-size: 26px; }
+  .twin { grid-template-columns: 1fr; }
+  .casefile, .compare-grid, .compare-attack { grid-template-columns: 1fr; }
+  .case-margin { position: static; border-left: 0; padding-left: 0; border-top: 1px solid var(--rule-2); padding-top: 16px; }
+  .cside, .cside + .cside { padding: 20px 0; border-left: 0; }
+  .cside + .cside { border-top: 1px solid var(--rule); }
+  .sec { padding: 24px 16px 72px; }
+  .sec-head { flex-direction: column; }
+  .rtable { display: block; overflow-x: auto; }
+  .modal { width: calc(100vw - 32px); }
+}
+
 /* ---------- narrower ---------- */
 @media (max-width: 1180px) {
   .hero-grid { grid-template-columns: 1fr; gap: 40px; }

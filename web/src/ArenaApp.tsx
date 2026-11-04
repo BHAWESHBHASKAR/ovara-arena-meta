@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { api, ApiError, getToken, setToken } from './api'
 import type { ArenaData, Profile, Round } from './types'
 import { useLiveArena, useRunningTask, useTaskFeed, type Source } from './data'
@@ -107,9 +107,14 @@ export default function ArenaApp({ route, replay }: { route: Extract<Route, { pa
     if (first) go(`/rounds/r/${first}`, true)
   }, [route.tab, selId, liveN, groups])
   useEffect(() => { setReveal(false) }, [selId, route.compare])
+  const prevSel = useRef<string | null>(null)
   useEffect(() => {
-    document.querySelector('.lrow.sel')?.scrollIntoView({ block: 'nearest' })
+    const narrow = window.matchMedia('(max-width: 900px)').matches
+    if (!narrow) document.querySelector('.lrow.sel')?.scrollIntoView({ block: 'nearest' })
     document.getElementById('case')?.scrollTo({ top: 0 })
+    // on a phone the case file sits under the ledger: a tap on a round should show it
+    if (narrow && prevSel.current && selId) document.getElementById('case')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    prevSel.current = selId
   }, [selId])
 
   // When the live round is scored, keep showing it: switch to the round that ran that task.
