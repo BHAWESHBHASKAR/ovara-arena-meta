@@ -6,7 +6,7 @@ import { go, type Route } from './router'
 import { Logo } from './ui'
 import { CompareView, LiveDetail, RoundDetail } from './Round'
 import { PolicyView, ReceiptsView } from './Secondary'
-import { INVOICE_USD, pairsOf, partnerOf, styleWord, usd, verdictOf } from './verdict'
+import { INVOICE_USD, groupsOf, partnerOf, styleWord, usd, verdictOf } from './verdict'
 import { Key, Loader, Play, Square, X } from './icons'
 
 const EMPTY: ArenaData = {
@@ -61,14 +61,14 @@ function Controls({ data, onRun, onStop, busy }: { data: ArenaData; onRun: (n: n
   )
 }
 
-function RoundButton({ r, sel }: { r?: Round; sel: boolean }) {
+function RoundButton({ r, sel, count = 1 }: { r?: Round; sel: boolean; count?: number }) {
   if (!r) return <span className="rb empty" />
   const v = verdictOf(r)
   return (
-    <button className={`rb ${sel ? 'sel' : ''}`} onClick={() => go(`/arena/r/${r.id}`)} aria-label={`Round ${r.n}, ${v.word}`} aria-current={sel ? 'true' : undefined}>
+    <button className={`rb ${sel ? 'sel' : ''}`} onClick={() => go(`/rounds/r/${r.id}`)} aria-label={`Round ${r.n}, ${v.word}`} aria-current={sel ? 'true' : undefined}>
       <i className={`dot ${v.tone === 'safe' ? 'safe' : v.tone === 'leak' ? 'leak' : ''}`} />
       <b>{v.short}</b>
-      <span>R{r.n}</span>
+      <span>R{r.n}{count > 1 ? ` · ${count} runs` : ''}</span>
     </button>
   )
 }
@@ -84,21 +84,35 @@ export default function ArenaApp({ route, replay }: { route: Extract<Route, { pa
 
   const liveUsable = live.reachable === true && !!live.data
   const liveRunning = liveUsable && !!live.data!.running
-  const source: Source = pref === 'live' && liveUsable ? 'live' : pref === 'replay' && replay ? 'replay' : liveRunning ? 'live' : replay ? 'replay' : 'live'
+  // Once a live run has been seen (or Live was picked), stay on Live; Recorded is only the first-load default.
+  const [stickyLive, setStickyLive] = useState(false)
+  useEffect(() => { if (liveRunning) setStickyLive(true) }, [liveRunning])
+  const source: Source = pref === 'replay' && replay ? 'replay'
+    : (pref === 'live' || stickyLive) && (liveUsable || live.data) ? 'live'
+    : liveRunning ? 'live' : replay ? 'replay' : 'live'
   const data: ArenaData = (source === 'live' ? live.data : replay) || EMPTY
 
   const runningTask = useRunningTask(source === 'live' && !!data.running)
   const liveN = source === 'live' && data.running ? data.rounds.length + 1 : 0
-  const pairs = useMemo(() => pairsOf(data.rounds), [data.rounds])
-  const order = useMemo(() => [...(liveN ? ['live'] : []), ...pairs.flatMap(p => [p.a, p.b].filter(Boolean).map(r => r!.id))], [pairs, liveN])
+  const groups = useMemo(() => groupsOf(data.rounds), [data.rounds])
+  const order = useMemo(() => [...(liveN ? ['live'] : []), ...groups.flatMap(g => [...g.on, ...g.off].sort((a, b) => a.n - b.n).map(r => r.id))], [groups, liveN])
 
   const selId = route.round || null
   useEffect(() => {
     if (route.tab !== 'rounds' || selId) return
-    const first = liveN ? 'live' : pairs[0]?.a.id
-    if (first) go(`/arena/r/${first}`, true)
-  }, [route.tab, selId, liveN, pairs])
+    const first = liveN ? 'live' : groups[0]?.root.id
+    if (first) go(`/rounds/r/${first}`, true)
+  }, [route.tab, selId, liveN, groups])
   useEffect(() => { setReveal(false) }, [selId, route.compare])
+
+  // When the live round is scored, keep showing it: switch to the round that ran that task.
+  const [liveTaskId, setLiveTaskId] = useState<string | null>(null)
+  useEffect(() => { if (runningTask?.id) setLiveTaskId(runningTask.id) }, [runningTask?.id])
+  useEffect(() => {
+    if (selId !== 'live' || liveN) return
+    const done = (liveTaskId && data.rounds.find(r => r.task_id === liveTaskId)) || [...data.rounds].sort((a, b) => b.n - a.n)[0]
+    if (done) go(`/rounds/r/${done.id}`, true)
+  }, [selId, liveN, liveTaskId, data.rounds])
 
   const round = selId && selId !== 'live' ? data.rounds.find(r => r.id === selId) : undefined
   const partner = round ? partnerOf(data.rounds, round) : undefined
@@ -112,7 +126,7 @@ export default function ArenaApp({ route, replay }: { route: Extract<Route, { pa
       if (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'j' || e.key === 'k') {
         const i = order.indexOf(selId || '')
         const next = order[Math.max(0, Math.min(order.length - 1, i + (e.key === 'ArrowDown' || e.key === 'j' ? 1 : -1)))]
-        if (next) { go(`/arena/r/${next}`); e.preventDefault() }
+        if (next) { go(`/rounds/r/${next}`); e.preventDefault() }
       }
     }
     window.addEventListener('keydown', onKey)
@@ -126,7 +140,7 @@ export default function ArenaApp({ route, replay }: { route: Extract<Route, { pa
   const run = (n: number, p: Profile) => {
     setBusy(true)
     api('POST', '/api/arena/run', { rounds: n, profile: p })
-      .then(() => { setNotice({ text: `Match started: ${n} round${n === 1 ? '' : 's'}, OVARA ${p === 'observe' ? 'off' : 'on'}.` }); setPref('live'); live.refresh(); go('/arena/r/live') })
+      .then(() => { setNotice({ text: `Match started: ${n} round${n === 1 ? '' : 's'}, OVARA ${p === 'observe' ? 'off' : 'on'}.` }); setPref('live'); live.refresh(); go('/rounds/r/live') })
       .catch(writeFail('Could not start')).finally(() => setBusy(false))
   }
   const stop = () => {
@@ -142,9 +156,9 @@ export default function ArenaApp({ route, replay }: { route: Extract<Route, { pa
       <header className="app-top">
         <a className="brand" href="#/"><Logo /> OVARA Arena</a>
         <nav className="app-tabs" aria-label="Views">
-          <a href="#/arena" className={route.tab === 'rounds' ? 'on' : ''}>Rounds</a>
-          <a href="#/arena/receipts" className={route.tab === 'receipts' ? 'on' : ''}>Receipts</a>
-          <a href="#/arena/policy" className={route.tab === 'policy' ? 'on' : ''}>Policy</a>
+          <a href="#/rounds" className={route.tab === 'rounds' ? 'on' : ''}>Rounds</a>
+          <a href="#/rounds/receipts" className={route.tab === 'receipts' ? 'on' : ''}>Receipts</a>
+          <a href="#/rounds/policy" className={route.tab === 'policy' ? 'on' : ''}>Policy</a>
         </nav>
         <div className="app-right">
           {liveUsable && replay && (
@@ -158,7 +172,7 @@ export default function ArenaApp({ route, replay }: { route: Extract<Route, { pa
             {source === 'live' ? (live.reachable === false ? 'API unreachable' : 'Live · PayPal sandbox') : `Recorded run${recorded && !isNaN(recorded.getTime()) ? ` · ${recorded.toLocaleDateString([], { dateStyle: 'medium' })}` : ''}`}
           </span>
           {liveUsable && <button className="icon-btn" title={getToken() ? 'Operator token set' : 'Set operator token'} onClick={() => setTokenOpen(true)}><Key size={16} /></button>}
-          <a className="btn btn-sm" href="#/">About</a>
+          <a className="btn btn-sm" href="#/">Overview</a>
         </div>
       </header>
 
@@ -183,24 +197,32 @@ export default function ArenaApp({ route, replay }: { route: Extract<Route, { pa
           <aside className="side" aria-label="Rounds">
             <div className="side-cols"><span>Attack</span><span>OVARA on</span><span>OVARA off</span></div>
             {liveN > 0 && (
-              <div className={`pair ${selId === 'live' ? 'sel' : ''}`}>
+              <div className={`pair pair-live ${selId === 'live' ? 'sel' : ''}`} role="button" tabIndex={0} onClick={() => go('/rounds/r/live')} onKeyDown={e => { if (e.key === 'Enter') go('/rounds/r/live') }}>
                 <div className="pair-subj"><b>{runningTask?.inbound?.subject || 'Attacker is writing'}</b><span><Loader size={12} /> round {liveN} in play</span></div>
-                <button className={`rb ${selId === 'live' ? 'sel' : ''}`} style={{ gridColumn: data.plan?.profile === 'observe' ? 3 : 2 }} onClick={() => go('/arena/r/live')}><span className="live-dot" /><b>Live</b></button>
+                <button className={`rb ${selId === 'live' ? 'sel' : ''}`} style={{ gridColumn: data.plan?.profile === 'observe' ? 3 : 2 }} onClick={() => go('/rounds/r/live')}><span className="live-dot" /><b>Live</b></button>
               </div>
             )}
-            {pairs.map((p, i) => {
-              const on = p.a.profile === 'strict' ? p.a : p.b
-              const off = p.a.profile === 'observe' ? p.a : p.b
-              const sel = selId === p.a.id || selId === p.b?.id
+            {groups.map((g, i) => {
+              const on = g.on[g.on.length - 1]
+              const off = g.off[g.off.length - 1]
+              const runs = [...g.on, ...g.off].sort((a, b) => a.n - b.n)
+              const sel = runs.some(r => r.id === selId)
+              const selOn = g.on.find(r => r.id === selId)
+              const selOff = g.off.find(r => r.id === selId)
               return (
-                <div key={p.key} className={`pair ${sel ? 'sel' : ''}`}>
-                  <div className="pair-subj"><b title={p.a.attack.subject}>{p.a.attack.subject || '(no subject)'}</b><span>Attack {i + 1} · {p.a.attack.image ? styleWord(p.a.attack.image.style) : 'no image'}</span></div>
-                  <RoundButton r={on} sel={!!on && selId === on.id} />
-                  <RoundButton r={off} sel={!!off && selId === off.id} />
+                <div key={g.key} className={`pair ${sel ? 'sel' : ''}`}>
+                  <div className="pair-subj"><b title={g.root.attack.subject}>{g.root.attack.subject || '(no subject)'}</b><span>Attack {i + 1} · {g.root.attack.image ? styleWord(g.root.attack.image.style) : 'no image'}</span></div>
+                  <RoundButton r={selOn || on} sel={!!(selOn || (on && selId === on.id))} count={g.on.length} />
+                  <RoundButton r={selOff || off} sel={!!(selOff || (off && selId === off.id))} count={g.off.length} />
+                  {runs.length > 2 && (
+                    <div className="pair-runs">
+                      {runs.map(r => <button key={r.id} className={`run-chip ${r.id === selId ? 'on' : ''} ${r.profile === 'observe' ? 'off' : 'onm'}`} onClick={() => go(`/rounds/r/${r.id}`)} title={`Round ${r.n}, OVARA ${r.profile === 'observe' ? 'off' : 'on'}: ${verdictOf(r).word}`}>R{r.n}</button>)}
+                    </div>
+                  )}
                 </div>
               )
             })}
-            {!pairs.length && !liveN && <p className="side-group">{source === 'live' && live.reachable === null ? 'Loading' : 'No rounds yet.'}</p>}
+            {!groups.length && !liveN && <p className="side-group">{source === 'live' && live.reachable === null ? 'Loading' : 'No rounds yet.'}</p>}
             <div className="side-foot">
               <span className="t-3 small">↑ ↓ to move between rounds, R to reveal.</span>
               {source === 'live' && liveUsable && <Controls data={data} onRun={run} onStop={stop} busy={busy} />}

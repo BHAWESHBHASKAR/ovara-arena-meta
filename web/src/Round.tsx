@@ -339,7 +339,7 @@ export function RoundDetail({ round, partner, feed, feedLoading, source, reveal,
           <VerdictBadge round={round} size="lg" />
           {!round.error && <span className="t-2">{fooled(round) ? 'The agent was fooled and called a money tool.' : 'The agent did not take the bait.'}</span>}
           {partner && (
-            <button className="btn btn-sm dh-compare" onClick={() => go(`/arena/compare/${round.id}`)}>
+            <button className="btn btn-sm dh-compare" onClick={() => go(`/rounds/compare/${round.id}`)}>
               Compare with {gateWord(partner.profile)} <ArrowRight size={15} />
             </button>
           )}
@@ -381,7 +381,7 @@ function CompareSide({ r }: { r: Round }) {
     <div className={`cside v-${v.tone}`}>
       <div className="cside-head">
         <GatePill profile={r.profile} />
-        <button className="link" onClick={() => go(`/arena/r/${r.id}`)}>Round {r.n}</button>
+        <button className="link" onClick={() => go(`/rounds/r/${r.id}`)}>Round {r.n}</button>
       </div>
       <div className="cside-verdict"><VerdictBadge round={r} size="lg" /></div>
       <dl className="cside-facts">
@@ -405,7 +405,7 @@ export function CompareView({ round, partner, source, reveal, setReveal }: { rou
         <div className="dh-kicker"><span className="t-3">Same attack, gate on and off · rounds {on.n} and {off.n}</span></div>
         <h1 className="detail-title">{base.attack.subject}</h1>
         <div className="dh-row">
-          <button className="btn btn-sm" onClick={() => go(`/arena/r/${round.id}`)}>Back to round {round.n}</button>
+          <button className="btn btn-sm" onClick={() => go(`/rounds/r/${round.id}`)}>Back to round {round.n}</button>
           <span className="t-3 small">The replay sent the same email and image; only the invoice number was swapped for the current open invoice.</span>
         </div>
       </header>

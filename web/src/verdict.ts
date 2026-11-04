@@ -20,22 +20,43 @@ export const usd = (n: number) => `$${n.toLocaleString('en-US')}`
 export const styleWord = (s?: string) => (s ? s.replace(/_/g, ' ') : '')
 
 export type Pair = { key: string; a: Round; b?: Round }
+export type Group = { key: string; root: Round; on: Round[]; off: Round[] }
 
-// Groups each original round with its replay (replay_of), in round order.
-export function pairsOf(rounds: Round[]): Pair[] {
+// Every run of one attack: the original and all its replays (replay_of chains),
+// split by the gate mode each run actually used (round.profile).
+export function groupsOf(rounds: Round[]): Group[] {
   const byId = new Map(rounds.map(r => [r.id, r]))
-  const replays = new Map<string, Round>()
-  for (const r of rounds) if (r.replay_of && byId.has(r.replay_of)) replays.set(r.replay_of, r)
-  const out: Pair[] = []
-  for (const r of [...rounds].sort((x, y) => x.n - y.n)) {
-    if (r.replay_of && byId.has(r.replay_of)) continue
-    out.push({ key: r.id, a: r, b: replays.get(r.id) })
+  const rootOf = (r: Round) => {
+    let x = r
+    for (let i = 0; i < 32 && x.replay_of && byId.has(x.replay_of); i++) x = byId.get(x.replay_of)!
+    return x
   }
-  return out
+  const groups = new Map<string, Group>()
+  for (const r of [...rounds].sort((x, y) => x.n - y.n)) {
+    const root = rootOf(r)
+    let g = groups.get(root.id)
+    if (!g) { g = { key: root.id, root, on: [], off: [] }; groups.set(root.id, g) }
+    ;(r.profile === 'observe' ? g.off : g.on).push(r)
+  }
+  return [...groups.values()].sort((a, b) => a.root.n - b.root.n)
 }
 
-export const partnerOf = (rounds: Round[], r: Round): Round | undefined =>
-  r.replay_of ? rounds.find(x => x.id === r.replay_of) : rounds.find(x => x.replay_of === r.id)
+// The original and the first run of the same attack in the other gate mode.
+export function pairsOf(rounds: Round[]): Pair[] {
+  return groupsOf(rounds).map(g => {
+    const other = (g.root.profile === 'observe' ? g.on : g.off)[0]
+    return { key: g.key, a: g.root, b: other }
+  })
+}
+
+export function partnerOf(rounds: Round[], r: Round): Round | undefined {
+  const g = groupsOf(rounds).find(x => x.on.includes(r) || x.off.includes(r))
+  if (!g) return undefined
+  const other = r.profile === 'observe' ? g.on : g.off
+  if (!other.length) return undefined
+  // the run nearest in time in the other mode, preferring the original
+  return other.includes(g.root) ? g.root : [...other].sort((a, b) => Math.abs(a.n - r.n) - Math.abs(b.n - r.n))[0]
+}
 
 // The controlled comparison: only originals that have a replay.
 export function controlled(data: ArenaData) {
