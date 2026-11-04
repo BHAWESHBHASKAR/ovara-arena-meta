@@ -254,6 +254,11 @@ kbd { display: inline-block; font-size: 11px; line-height: 1.5; padding: 0 5px; 
 .hero h1 { font-size: 62px; line-height: 1.03; letter-spacing: -0.022em; font-weight: 500; margin-top: 22px; max-width: 13em; }
 .hero h1 em { color: var(--safe); }
 .hero-sub { font-size: 18px; color: var(--ink-2); margin-top: 26px; max-width: 34em; line-height: 1.5; }
+.hero .hero-kicker { color: var(--ink); }
+.hero-tally { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin: 28px 0 0; padding-top: 18px; border-top: 1px solid var(--rule-2); max-width: 34em; }
+.hero-tally dt { font: 500 11.5px/1.4 var(--sans); letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-3); }
+.hero-tally dd { margin: 6px 0 0; font: 500 44px/1.05 var(--serif); letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.hero-tally dd small { display: block; margin-top: 6px; font: 400 14px/1.4 var(--sans); letter-spacing: 0; color: var(--ink-2); }
 .hero-cta { display: flex; align-items: center; gap: 28px; margin-top: 36px; flex-wrap: wrap; }
 .hero-fig { position: relative; margin: 0; }
 .hero-exhibit { position: absolute; left: -56px; bottom: -48px; width: 250px; }
@@ -316,6 +321,7 @@ kbd { display: inline-block; font-size: 11px; line-height: 1.5; padding: 0 5px; 
 /* results */
 .results-band { padding: 104px 0 112px; }
 .rb-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 48px; }
+.rb-strip { min-width: 0; }
 .statement { font: 400 46px/1.12 var(--serif); letter-spacing: -0.018em; color: var(--ink); margin-top: 16px; max-width: 22em; }
 .statement.big { font-size: 54px; line-height: 1.08; max-width: 17em; margin-top: 18px; }
 .rb-links { display: flex; gap: 28px; margin-top: 28px; font-size: 15px; flex-wrap: wrap; }
@@ -346,6 +352,7 @@ kbd { display: inline-block; font-size: 11px; line-height: 1.5; padding: 0 5px; 
 /* how it works */
 .figs-long { gap: 40px; }
 .arch { margin-top: 40px; padding: 32px 0; border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule); overflow-x: auto; }
+.arch-hint, .sstrip-hint { display: none; margin-top: 8px; font: 500 11px/1.4 var(--sans); letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-3); }
 .arch svg { display: block; width: 100%; min-width: 900px; height: auto; }
 .arch .n rect, .arch .n-in rect { fill: var(--sheet); stroke: var(--rule-2); }
 .arch .n-strong rect { fill: var(--sheet); stroke: var(--ink); stroke-width: 1.2; }
@@ -490,7 +497,7 @@ kbd { display: inline-block; font-size: 11px; line-height: 1.5; padding: 0 5px; 
   .app { min-width: 0; height: auto; min-height: 100vh; display: block; }
   .app-top { height: auto; flex-wrap: wrap; gap: 8px 20px; padding: 12px 16px; position: sticky; top: 0; z-index: 20; background: var(--page); }
   .app-right { gap: 12px; }
-  .app-right .src { display: none; }
+  .app-right .src:not(.src-credit) { display: none; }
   .app-body { display: block; }
   .ledger-pane { overflow: visible; padding: 24px 16px; border-right: 0; border-bottom: 1px solid var(--rule-2); }
   .lrow { grid-template-columns: 18px minmax(0, 1fr) 66px 66px; gap: 8px; padding: 10px 4px; }
@@ -534,7 +541,14 @@ kbd { display: inline-block; font-size: 11px; line-height: 1.5; padding: 0 5px; 
   .hero h1 { font-size: 40px; margin-top: 16px; }
   .hero-sub { font-size: 16.5px; margin-top: 18px; }
   .hero-cta { gap: 18px; margin-top: 26px; }
-  .hero-exhibit { position: relative; right: auto; bottom: auto; left: 0; width: 72%; margin: -24px 0 0 6%; }
+  .hero-exhibit { position: relative; right: auto; bottom: auto; left: 0; width: 100%; margin: 0; }
+  .hero-exhibit figcaption { max-width: none; }
+  .hero-fig .figure-slot { display: none; }
+  .hero-tally { gap: 16px; }
+  .hero-tally dd { font-size: 34px; }
+  .arch { -webkit-mask-image: linear-gradient(90deg, #000 85%, transparent); mask-image: linear-gradient(90deg, #000 85%, transparent); }
+  .arch svg { min-width: 760px; }
+  .arch-hint { display: block; }
   .band { padding: 64px 0; }
   .figs-band { padding: 28px 0 48px; }
   .figs { gap: 20px 16px; }
@@ -566,7 +580,8 @@ kbd { display: inline-block; font-size: 11px; line-height: 1.5; padding: 0 5px; 
   .statement.big, .page-h { font-size: 36px; }
   .sstrip { overflow-x: auto; }
   .sstrip-row { grid-template-columns: 64px repeat(8, 80px); }
-  .sstrip { margin-right: -16px; padding-right: 16px; }
+  .sstrip { margin-right: -16px; padding-right: 16px; -webkit-mask-image: linear-gradient(90deg, #000 85%, transparent); mask-image: linear-gradient(90deg, #000 85%, transparent); }
+  .sstrip-hint { display: block; }
   .ledger-table { font-size: 13.5px; }
   .ledger-table th:nth-child(2), .ledger-table td:nth-child(2), .ledger-table th:last-child, .ledger-table td:last-child { display: none; }
   .ledger-table td.subj { font-size: 15px; }

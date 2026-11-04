@@ -53,4 +53,4 @@ export const go = (path: string, replace = false) => {
   } else location.hash = h
 }
 
-export const GITHUB_URL = '#github'
+export const GITHUB_URL = 'https://github.com/BHAWESHBHASKAR/ovara-arena-meta'

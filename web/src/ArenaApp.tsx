@@ -170,10 +170,11 @@ export default function ArenaApp({ route, replay }: { route: Extract<Route, { pa
         <a className="brand" href="#/"><Logo /> OVARA Arena</a>
         <nav className="app-tabs" aria-label="Views">
           <a href="#/rounds" className={route.tab === 'rounds' ? 'on' : ''} aria-current={route.tab === 'rounds' ? 'page' : undefined}>Ledger</a>
-          <a href="#/rounds/receipts" className={route.tab === 'receipts' ? 'on' : ''} aria-current={route.tab === 'receipts' ? 'page' : undefined}>Receipts</a>
+          {(source === 'live' || !!replay?.receipts?.length) && <a href="#/rounds/receipts" className={route.tab === 'receipts' ? 'on' : ''} aria-current={route.tab === 'receipts' ? 'page' : undefined}>Receipts</a>}
           <a href="#/rounds/policy" className={route.tab === 'policy' ? 'on' : ''} aria-current={route.tab === 'policy' ? 'page' : undefined}>Policy</a>
         </nav>
         <div className="app-right">
+          <span className="src src-credit">Built with Muse Spark Open</span>
           {liveUsable && replay && (
             <div className="seg seg-sm" role="group" aria-label="Data source">
               <button className={source === 'replay' ? 'on' : ''} onClick={() => setPref('replay')}>Recorded</button>

@@ -89,7 +89,12 @@ export function PolicyView({ source, replay }: { source: Source; replay: ArenaDa
   const [policy, setPolicy] = useState<Policy | null>(source === 'replay' ? replay?.policy || null : null)
   const [err, setErr] = useState('')
   useEffect(() => {
-    if (source !== 'live') { setPolicy(replay?.policy || null); return }
+    if (source !== 'live') {
+      if (replay?.policy) { setPolicy(replay.policy); return }
+      // the recorded run has no policy dump: show the PayPal rules the image ships (ovara/policy.paypal.json)
+      fetch(`${import.meta.env.BASE_URL}policy.json`).then(r => (r.ok ? r.json() : null)).then(p => setPolicy(p)).catch(() => setPolicy(null))
+      return
+    }
     api<Policy>('GET', '/api/policy').then(setPolicy).catch(e => setErr(String(e?.message || e)))
   }, [source, replay])
   const rules = policy?.rules || []

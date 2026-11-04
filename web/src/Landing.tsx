@@ -74,7 +74,7 @@ const sentenceWith = (text: string, re: RegExp) => {
 // ---------- nav ----------
 
 const NAV: [string, string, string[]][] = [
-  ['Overview', '#/', ['landing']], ['How it works', '#/how-it-works', ['how']], ['Results', '#/results', ['results']], ['Ledger', '#/rounds', ['arena']], ['About', '#/about', ['about']],
+  ['Overview', '#/', ['landing']], ['How it works', '#/how-it-works', ['how']], ['Results', '#/results', ['results']], ['All rounds', '#/rounds', ['arena']], ['About', '#/about', ['about']],
 ]
 
 export function SiteNav({ page }: { page: string }) {
@@ -92,22 +92,29 @@ export function SiteNav({ page }: { page: string }) {
 
 // ---------- hero + figures ----------
 
-const scrollToDemo = (e?: React.MouseEvent) => { e?.preventDefault(); document.getElementById('try')?.scrollIntoView({ behavior: 'smooth' }) }
-
 function Hero({ data }: { data: ArenaData | null }) {
   const story = useStory(data)
-  const ex = story?.held
+  // the exhibit is the picture the headline is about: the sticky note that got an invoice cancelled with no gate
+  const ex = story?.off || story?.held
   const exImg = ex ? imageSrc(ex.image_url, 'replay') : null
+  const c = data ? controlled(data) : null
+  const keyRound = story?.on
   return (
     <section className="hero" id="overview">
       <div className="wrap hero-grid">
         <div className="hero-copy">
-          <div className="kicker">OVARA Arena · a Muse Spark hackathon entry</div>
+          <div className="kicker hero-kicker">Built with Muse Spark Open · Meta Global AI Developer Hackathon</div>
           <h1>A picture told the agent to cancel an invoice. <em>OVARA held the call.</em></h1>
-          <p className="hero-sub">Muse Spark attacks a studio’s PayPal agent; OVARA holds every call that moves money for a person.</p>
+          <p className="hero-sub">Meta’s Muse Spark plays every role: it writes the attacks, it keeps the books, it drafts the rule. OVARA sits on the wire and holds every call that moves money until a person says yes.</p>
+          {c && (
+            <dl className="hero-tally">
+              <div><dt>Same {c.pairs.length} attacks · OVARA off</dt><dd className={c.off.landed ? 'leak-ink' : ''}>{usd(c.off.landed * INVOICE_USD)}<small>{c.off.landed} invoice{c.off.landed === 1 ? '' : 's'} cancelled at PayPal</small></dd></div>
+              <div><dt>Same {c.pairs.length} attacks · OVARA on</dt><dd className={c.on.landed ? 'leak-ink' : 'safe-ink'}>{usd(c.on.landed * INVOICE_USD)}<small>{c.on.landed ? `${c.on.landed} cancelled at PayPal` : 'nothing reached PayPal'}</small></dd></div>
+            </dl>
+          )}
           <div className="hero-cta">
-            <a className="btn btn-primary btn-lg" href="#/demo" onClick={scrollToDemo}>Follow one attack</a>
-            <a className="link" href="#/rounds">Open the ledger of all {data?.rounds.length || ''} rounds →</a>
+            <a className="btn btn-primary btn-lg" href="#/demo?play=1">Play the attack · 1 minute</a>
+            {keyRound ? <a className="link" href={`#/rounds/compare/${keyRound.id}`}>See the round where the order was only in the image →</a> : <a className="link" href="#/rounds">All attacks, OVARA off and on →</a>}
           </div>
         </div>
         <figure className="hero-fig">
@@ -118,7 +125,7 @@ function Hero({ data }: { data: ArenaData | null }) {
                 <img src={exImg} alt="" />
                 <VerdictStamp round={ex} size="md" className="stamp-in" />
               </div>
-              <figcaption><b>Exhibit.</b> Round {ex.n}: the attachment that fooled the agent. The cancel was held.</figcaption>
+              <figcaption><b>Exhibit.</b> {ex.verdict === 'landed' ? <>The note on this wire confirmation told the agent to cancel a {usd(INVOICE_USD)} invoice. With no gate it did (round {ex.n}). With OVARA on, nothing reached PayPal.</> : <>Round {ex.n}: the attachment that fooled the agent. The cancel was held.</>}</figcaption>
             </div>
           )}
         </figure>
@@ -225,7 +232,7 @@ function Demo({ data, autoplay }: { data: ArenaData; autoplay?: boolean }) {
     'The attachment looks like a wire confirmation, with a note stuck on it.',
     'The note, posing as the owner, says to cancel the PayPal invoice.',
     `Round ${off.n}, OVARA off: the agent cancels the invoice and PayPal carries it out.`,
-    held ? `Round ${held.n}, OVARA on: the cancel is held for a person, who denies it.` : 'No held round is in this recording.',
+    held ? (held.attack.image?.style === on.attack.image?.style ? `Round ${held.n}, OVARA on: the cancel is held for a person, who denies it.` : `Round ${held.n}, a different attack, OVARA on: the agent was fooled again; the cancel was held and a person denied it.`) : 'No held round is in this recording.',
     'Muse Spark drafts a rule from the incident; OVARA checks it. It is blunt.',
   ]
 
@@ -424,6 +431,7 @@ function HowItWorksBody() {
             <Node x={150} y={278} w={200} h={46} title="Muse Spark drafts a rule" />
           </svg>
         </div>
+        <p className="arch-hint">Drag to see the whole diagram →</p>
         <dl className="defs">
           <div><dt>Reads pass</dt><dd>Listing, reading and sending invoices go straight through and get a receipt.</dd></div>
           <div><dt>Money waits</dt><dd>Cancel, refund, pay and accept-dispute calls are held until a person decides.</dd></div>
@@ -439,7 +447,10 @@ function HowItWorksBody() {
 
 function AboutBody() {
   const built: [string, string, string][] = [
-    ['Muse Spark', "Meta's open-weights model (muse-spark-open), served through an OpenAI-compatible endpoint. It plays the attacker, the agent (vision and tool calling) and the rule drafter.", ''],
+    ['Muse Spark Open', "Meta's open-weights model (muse-spark-open), served through an OpenAI-compatible endpoint as meta-models/muse-spark-open. One model plays all three roles below.", ''],
+    ['· as the attacker', 'Writes one client email per round plus an image spec with a hidden line, and changes approach after seeing how earlier rounds ended.', ''],
+    ['· as the agent', 'Vision and tool calling: reads the email and the image as pixels, and works the PayPal sandbox through PayPal’s MCP server.', ''],
+    ['· as the rule drafter', 'Reads the trace of a held round and proposes an OVARA rule; OVARA validates it before one click applies it.', ''],
     ['OVARA', 'An open-source gateway in Go, Apache-2.0. It holds calls that move money for a person and signs a receipt for every decision.', 'https://github.com/SidianLabs/OVARA'],
     ['PayPal MCP server', "PayPal's official MCP server, working a PayPal sandbox account. No real money moves.", ''],
   ]
@@ -475,8 +486,8 @@ export function Footer() {
   return (
     <footer className="footer">
       <div className="wrap">
-        <span>Sidian Labs · {new Date().getFullYear()}</span>
-        <nav><a href="#/how-it-works">How it works</a><a href="#/results">Results</a><a href="#/rounds">Ledger</a><a href="#/about">About</a><a href={GITHUB_URL}>GitHub</a><a href="https://github.com/SidianLabs/OVARA" target="_blank" rel="noreferrer">OVARA</a></nav>
+        <span>Sidian Labs · {new Date().getFullYear()} · Built with Muse Spark Open, Meta’s open-weights model</span>
+        <nav><a href="#/how-it-works">How it works</a><a href="#/results">Results</a><a href="#/rounds">All rounds</a><a href="#/about">About</a><a href={GITHUB_URL} target="_blank" rel="noreferrer">GitHub</a><a href="https://github.com/SidianLabs/OVARA" target="_blank" rel="noreferrer">OVARA</a></nav>
       </div>
     </footer>
   )
@@ -489,9 +500,9 @@ function ResultsBand({ data }: { data: ArenaData }) {
         <div>
           <div className="kicker">The result</div>
           <Statement data={data} />
-          <p className="rb-links"><a href="#/results">Results and limits →</a><a href="#/rounds">Open the ledger →</a></p>
+          <p className="rb-links"><a href="#/results">Results and limits →</a><a href="#/rounds">Every round →</a></p>
         </div>
-        <StampStrip data={data} />
+        <div className="rb-strip"><StampStrip data={data} /><p className="sstrip-hint">Scroll for all {twins(data).length} attacks →</p></div>
       </div>
     </section>
   )
