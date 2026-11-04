@@ -1,287 +1,222 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { api, sleep } from './api'
-import type { Approval, Draft, FeedItem, Integrity, Policy, Receipt, ReplayData, Scenario, State, Task } from './types'
-import { Feed } from './Feed'
-import { Approvals, type DecideFn } from './Approvals'
-import { PolicyPanel, Queue, Receipts, SCENARIOS, type VerifyResult } from './Panels'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { api, ApiError, getToken, setToken } from './api'
+import type { ArenaData, Profile } from './types'
+import { loadReplay, useLiveArena, useRunningTask, useTaskFeed, type Source } from './data'
+import { Players, Scoreboard, Timeline, type Filter } from './Arena'
+import { LiveStage, RoundStage } from './Stage'
+import { PolicyView, ReceiptsView } from './Secondary'
+import { Key, Loader, Play, Square, Swords, X } from './icons'
 
-type Mode = 'strict' | 'off'
-const LOADED_AT = Date.now()
-const SHORT: Record<string, string> = { poisoned: 'Poisoned note', duplicate: 'Duplicate', shift: 'Shift' }
+type View = 'arena' | 'receipts' | 'policy'
 
-function usePoll(fn: () => Promise<unknown>, ms: number, deps: unknown[] = []) {
-  useEffect(() => {
-    let stop = false, t: ReturnType<typeof setTimeout>
-    const tick = () => fn().catch(() => {}).finally(() => { if (!stop) t = setTimeout(tick, ms) })
-    tick()
-    return () => { stop = true; clearTimeout(t) }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, deps)
+const EMPTY: ArenaData = {
+  running: false, plan: null, models: {}, rounds: [],
+  summary: {
+    strict: { rounds: 0, agent_fooled: 0, landed: 0, held_denied: 0, refused: 0, ignored: 0, noticed: 0, with_image: 0 },
+    observe: { rounds: 0, agent_fooled: 0, landed: 0, held_denied: 0, refused: 0, ignored: 0, noticed: 0, with_image: 0 },
+  },
 }
 
-const hasItems = (d: ReplayData | null) => !!d && Object.values(d.scenarios || {}).some(s => (s?.strict?.length || 0) + (s?.off?.length || 0) > 0)
-
-async function loadReplay(): Promise<ReplayData | null> {
-  try {
-    const d = await api<ReplayData>('GET', '/api/replay')
-    if (hasItems(d)) return d
-  } catch { /* fall back to the bundled file */ }
-  try {
-    const r = await fetch(`${import.meta.env.BASE_URL}replay.json`, { cache: 'no-store' })
-    const d = (await r.json()) as ReplayData
-    return hasItems(d) ? d : null
-  } catch {
-    return null
-  }
-}
-
-const atMs = (at: string | number) => (typeof at === 'number' ? (at < 1e12 ? at * 1000 : at) : new Date(at).getTime())
-
-function Panel({ title, right, className, children }: { title: React.ReactNode; right?: React.ReactNode; className?: string; children: React.ReactNode }) {
+function TokenDialog({ onClose }: { onClose: () => void }) {
+  const [v, setV] = useState(getToken())
   return (
-    <section className={`panel ${className || ''}`}>
-      <header className="panel-head"><h2>{title}</h2>{right && <div className="panel-right">{right}</div>}</header>
-      <div className="panel-body">{children}</div>
-    </section>
+    <div className="modal-bg" onClick={onClose}>
+      <div className="modal" role="dialog" aria-label="Operator token" onClick={e => e.stopPropagation()}>
+        <div className="modal-head"><Key size={16} /> Operator token <button className="icon-btn" onClick={onClose} aria-label="Close"><X size={16} /></button></div>
+        <p className="dim">Starting a match, stopping it and drafting rules need the API token (sent as <code>Authorization: Bearer</code>). It is kept in this browser only.</p>
+        <input className="input mono" type="password" autoFocus value={v} placeholder="API token" onChange={e => setV(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') { setToken(v); onClose() } }} />
+        <div className="row-end">
+          {getToken() && <button className="btn ghost" onClick={() => { setToken(''); onClose() }}>Forget</button>}
+          <button className="btn primary" onClick={() => { setToken(v); onClose() }}>Save</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function Controls({ data, onRun, onStop, busy }: { data: ArenaData; onRun: (n: number, p: Profile) => void; onStop: () => void; busy: boolean }) {
+  const [n, setN] = useState(3)
+  const [p, setP] = useState<Profile>('strict')
+  const plan = data.plan
+  if (data.running && plan) {
+    const pct = Math.min(100, (plan.done / Math.max(1, plan.rounds)) * 100)
+    return (
+      <div className="controls running">
+        <div className="run-state">
+          <div className="run-line"><span className="live-dot" /> Match running · round {Math.min(plan.done + 1, plan.rounds)} of {plan.rounds} · OVARA {plan.profile === 'observe' ? 'off' : 'on'}</div>
+          <div className="progress"><span style={{ width: `${pct}%` }} /></div>
+        </div>
+        <button className="btn" disabled={busy} onClick={onStop}><Square size={13} /> Stop after this round</button>
+      </div>
+    )
+  }
+  return (
+    <div className="controls">
+      <label className="ctl-n">
+        <span className="dim">Rounds</span>
+        <input type="number" min={1} max={20} value={n} onChange={e => setN(Math.max(1, Math.min(20, Number(e.target.value) || 1)))} />
+      </label>
+      <div className="seg" role="group" aria-label="Gate">
+        <button className={p === 'strict' ? 'on on-green' : ''} onClick={() => setP('strict')}>OVARA on</button>
+        <button className={p === 'observe' ? 'on on-red' : ''} onClick={() => setP('observe')}>OVARA off</button>
+      </div>
+      <button className="btn primary" disabled={busy} onClick={() => onRun(n, p)}>{busy ? <Loader size={14} /> : <Play size={13} />} Start match</button>
+    </div>
   )
 }
 
 export default function App() {
-  const [state, setState] = useState<State | null>(null)
-  const [reachable, setReachable] = useState<boolean | null>(null)
-  const [tasks, setTasks] = useState<Task[]>([])
-  const [approvals, setApprovals] = useState<Approval[]>([])
-  // false once GET /api/approvals fails: stale cards are cleared, not left clickable
-  const [approvalsOk, setApprovalsOk] = useState(true)
-  const [receipts, setReceipts] = useState<Receipt[]>([])
-  const [integrity, setIntegrity] = useState<Integrity | null>(null)
-  const [policy, setPolicy] = useState<Policy | null>(null)
-  const [draft, setDraft] = useState<Draft | null>(null)
-  const [live, setLive] = useState<FeedItem[]>([])
-  const [view, setView] = useState<'replay' | 'live'>('replay')
-  const [notice, setNotice] = useState<{ text: string; bad?: boolean } | null>(null)
-  const [profileBusy, setProfileBusy] = useState(false)
-
-  const [replay, setReplay] = useState<ReplayData | null>(null)
+  const live = useLiveArena()
+  const [replay, setReplay] = useState<ArenaData | null>(null)
   const [replayTried, setReplayTried] = useState(false)
-  const [rScenario, setRScenario] = useState<string>('poisoned')
-  const [rMode, setRMode] = useState<Mode>('strict')
-  const [rIdx, setRIdx] = useState(0)
-  const [rRun, setRRun] = useState(0)
+  const [pref, setPref] = useState<'auto' | Source>('auto')
+  const [view, setView] = useState<View>('arena')
+  const [selected, setSelected] = useState<string | null>(null)
+  const [follow, setFollow] = useState(true)
+  const [reveal, setReveal] = useState(false)
+  const [filter, setFilter] = useState<Filter>('all')
+  const [tokenOpen, setTokenOpen] = useState(false)
+  const [notice, setNotice] = useState<{ text: string; bad?: boolean } | null>(null)
+  const [busy, setBusy] = useState(false)
 
-  const say = useCallback((text: string, bad = false) => setNotice({ text, bad }), [])
+  useEffect(() => { loadReplay().then(d => { setReplay(d); setReplayTried(true) }) }, [])
   useEffect(() => { if (!notice) return; const t = setTimeout(() => setNotice(null), 5000); return () => clearTimeout(t) }, [notice])
 
+  const liveUsable = live.reachable === true && !!live.data
+  // Default: the recorded run, unless a live match is going (or there is no recording).
+  const liveRunning = liveUsable && !!live.data!.running
+  const source: Source = pref !== 'auto' ? (pref === 'live' && !liveUsable && replay ? 'replay' : pref === 'replay' && !replay ? 'live' : pref)
+    : liveRunning ? 'live' : replay ? 'replay' : 'live'
+  const data: ArenaData = (source === 'live' ? live.data : replay) || EMPTY
+
+  const runningTask = useRunningTask(source === 'live' && !!data.running)
+  const liveRound = source === 'live' && data.running
+    ? { n: data.rounds.length + 1, label: runningTask?.inbound?.subject || 'Attacker is writing', profile: data.plan?.profile || runningTask?.profile || 'strict' }
+    : null
+
+  const ordered = useMemo(() => [...data.rounds].sort((a, b) => b.n - a.n), [data.rounds])
+  const visible = useMemo(() => ordered.filter(r => filter === 'all' || r.profile === filter), [ordered, filter])
+  const navIds = useMemo(() => [...(liveRound ? ['live'] : []), ...visible.map(r => r.id)], [liveRound, visible])
+
+  // Follow mode: the newest round, or the live one once its email exists.
+  const newestId = ordered[0]?.id || null
+  const lastNewest = useRef<string | null>(null)
   useEffect(() => {
-    loadReplay().then(d => {
-      setReplay(d)
-      setReplayTried(true)
-      if (d && !d.scenarios.poisoned) setRScenario(Object.keys(d.scenarios)[0] || 'poisoned')
-    })
-  }, [])
+    if (!follow) return
+    if (liveRound && runningTask?.inbound) setSelected('live')
+    else if (newestId && (selected === 'live' || selected === null || lastNewest.current !== newestId)) setSelected(newestId)
+    lastNewest.current = newestId
+  }, [follow, liveRound, runningTask?.inbound, newestId, selected])
+  useEffect(() => { if (selected === 'live' && !liveRound) setSelected(newestId) }, [selected, liveRound, newestId])
+  useEffect(() => { setReveal(false) }, [selected])
 
-  const rModes = (['strict', 'off'] as Mode[]).filter(m => (replay?.scenarios[rScenario]?.[m]?.length || 0) > 0)
-  useEffect(() => { if (rModes.length && !rModes.includes(rMode)) setRMode(rModes[0]) }, [rModes, rMode])
-  const rItems = replay?.scenarios[rScenario]?.[rMode] || []
-  useEffect(() => { setRIdx(0) }, [rScenario, rMode, rRun])
+  const round = selected && selected !== 'live' ? data.rounds.find(r => r.id === selected) || null : null
+  const taskId = selected === 'live' ? runningTask?.id : round?.task_id
+  const { items: feed, loading: feedLoading } = useTaskFeed(taskId, source, data.feeds, selected === 'live')
+
+  const pick = useCallback((id: string) => { setSelected(id); setFollow(id === 'live' || id === navIds[0]) }, [navIds])
+
   useEffect(() => {
-    if (view !== 'replay' || rIdx >= rItems.length) return
-    const prev = rItems[rIdx - 1], cur = rItems[rIdx]
-    const gap = prev ? atMs(cur.at) - atMs(prev.at) : 0
-    const delay = rIdx === 0 ? 250 : Math.min(1400, Math.max(260, isNaN(gap) ? 600 : gap))
-    const t = setTimeout(() => setRIdx(i => i + 1), delay)
-    return () => clearTimeout(t)
-  }, [view, rIdx, rItems])
-
-  usePoll(() => api<State>('GET', '/api/state').then(s => { setState(s); setReachable(true) }).catch(e => { setReachable(false); throw e }), 5000)
-  usePoll(() => api<Task[] | { tasks: Task[] }>('GET', '/api/tasks').then(t => setTasks(Array.isArray(t) ? t : t?.tasks || [])), 2000)
-  usePoll(() => api<Approval[] | { approvals: Approval[] }>('GET', '/api/approvals')
-    .then(a => { setApprovals(Array.isArray(a) ? a : a?.approvals || []); setApprovalsOk(true) })
-    .catch(e => { setApprovals([]); setApprovalsOk(false); throw e }), 1500)
-
-  const loadReceipts = useCallback(() => api<Receipt[] | { receipts: Receipt[]; integrity?: Integrity }>('GET', '/api/receipts?n=100').then(r => {
-    if (Array.isArray(r)) { setReceipts(r); return }
-    setReceipts(r?.receipts || [])
-    if (r?.integrity) setIntegrity(r.integrity)
-  }), [])
-  usePoll(loadReceipts, 6000, [loadReceipts])
-
-  const loadPolicy = useCallback(() => api<Policy>('GET', '/api/policy').then(setPolicy), [])
-  usePoll(loadPolicy, 15000, [loadPolicy])
-
-  // Live feed: long-poll. New activity after the page loaded takes the feed over from the replay.
-  useEffect(() => {
-    const ctl = new AbortController()
-    let since = 0
-    ;(async () => {
-      while (!ctl.signal.aborted) {
-        const t0 = Date.now()
-        try {
-          const r = await api<FeedItem[] | { items: FeedItem[] }>('GET', `/api/feed?since=${since}`, undefined, ctl.signal)
-          const items = (Array.isArray(r) ? r : r?.items || []).filter(i => typeof i?.seq === 'number')
-          if (items.length) {
-            since = Math.max(since, ...items.map(i => i.seq))
-            setLive(prev => {
-              const seen = new Set(prev.map(p => p.seq))
-              return [...prev, ...items.filter(i => !seen.has(i.seq))].sort((a, b) => a.seq - b.seq).slice(-600)
-            })
-            if (items.some(i => { const t = atMs(i.at); return isNaN(t) || t >= LOADED_AT - 2000 })) setView('live')
-          }
-          if (Date.now() - t0 < 800) await sleep(800)
-        } catch {
-          if (ctl.signal.aborted) return
-          await sleep(3000)
-        }
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement
+      if (tokenOpen || view !== 'arena' || t.closest('input, textarea, select') || e.metaKey || e.ctrlKey || e.altKey) return
+      if (e.key === 'r' || e.key === 'R') { setReveal(v => !v); e.preventDefault() }
+      if (e.key === 'ArrowDown' || e.key === 'j' || e.key === 'ArrowUp' || e.key === 'k') {
+        const i = navIds.indexOf(selected || '')
+        const d = e.key === 'ArrowDown' || e.key === 'j' ? 1 : -1
+        const next = navIds[Math.max(0, Math.min(navIds.length - 1, (i < 0 ? 0 : i + d)))]
+        if (next) { pick(next); e.preventDefault() }
       }
-    })()
-    return () => ctl.abort()
-  }, [])
-  useEffect(() => { loadReceipts().catch(() => {}) }, [live.length, loadReceipts])
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [navIds, selected, pick, tokenOpen, view])
 
-  const profile: State['profile'] = state?.profile || policy?.profile || 'strict'
-  const setProfile = (p: State['profile']) => {
-    if (p === profile || profileBusy) return
-    setProfileBusy(true)
-    api('POST', '/api/policy/profile', { profile: p })
-      .then(() => { setState(s => (s ? { ...s, profile: p } : s)); setPolicy(x => (x ? { ...x, profile: p } : x)); say(p === 'strict' ? 'OVARA is on. Calls go through OVARA.' : 'OVARA is off. The next task talks to PayPal directly.') })
-      .catch(e => say(`Could not switch: ${e.message}`, true))
-      .finally(() => setProfileBusy(false))
+  const writeFail = (what: string) => (e: unknown) => {
+    if (e instanceof ApiError && e.status === 401) { setTokenOpen(true); setNotice({ text: `${what}: the API needs the operator token.`, bad: true }) }
+    else setNotice({ text: `${what}: ${(e as Error)?.message || e}`, bad: true })
+  }
+  const run = (n: number, p: Profile) => {
+    setBusy(true)
+    api('POST', '/api/arena/run', { rounds: n, profile: p })
+      .then(() => { setNotice({ text: `Match started: ${n} round${n === 1 ? '' : 's'}, OVARA ${p === 'observe' ? 'off' : 'on'}.` }); setFollow(true); setPref('live'); live.refresh() })
+      .catch(writeFail('Could not start'))
+      .finally(() => setBusy(false))
+  }
+  const stop = () => {
+    setBusy(true)
+    api('POST', '/api/arena/stop').then(() => { setNotice({ text: 'The match stops after the current round.' }); live.refresh() }).catch(writeFail('Could not stop')).finally(() => setBusy(false))
   }
 
-  const run = useCallback((body: { text: string } | { scenario: Scenario }) =>
-    api('POST', '/api/tasks', body).then(() => { setView('live'); say('Task queued.') }).catch(e => { say(`Could not start: ${e.message}`, true); throw e }), [say])
-  const stop = (id: string) => api('POST', `/api/tasks/${encodeURIComponent(id)}/stop`).then(() => say('Stopping the task.')).catch(e => say(`Could not stop: ${e.message}`, true))
-
-  const decide: DecideFn = (id, action) => {
-    const path = `/api/approvals/${encodeURIComponent(id)}/${action === 'deny' ? 'deny' : 'approve'}`
-    const body = action === 'deny' ? {} : { remember: action === 'remember' }
-    return api('POST', path, body).then(() => {
-      setApprovals(a => a.filter(x => x.id !== id))
-      say(action === 'deny' ? 'Denied. The agent is told the operator refused.' : action === 'remember' ? 'Approved. This exact tool is now allowed.' : 'Approved once.')
-      loadReceipts().catch(() => {})
-      if (action === 'remember') loadPolicy().catch(() => {})
-    }).catch(e => say(`Could not ${action === 'deny' ? 'deny' : 'approve'}: ${e.message}`, true))
-  }
-
-  const verify = () => api<VerifyResult>('POST', '/api/receipts/verify')
-
-  const sortedTasks = useMemo(() => [...tasks].sort((a, b) => (atMs(b.started_at || 0) || 0) - (atMs(a.started_at || 0) || 0)), [tasks])
-  // the incident the drafter reads is the task that finished last, never one still running
-  const lastTaskId = useMemo(() => {
-    const finished = tasks.filter(t => t.status === 'done' || t.status === 'failed' || t.status === 'stopped')
-      .sort((a, b) => (atMs(b.ended_at || 0) || 0) - (atMs(a.ended_at || 0) || 0))
-    if (finished[0]) return finished[0].id
-    return [...live].reverse().find(i => i.kind === 'done')?.task_id || null
-  }, [tasks, live])
-  const taskRunning = tasks.some(t => t.status === 'running')
-
-  const onDraft = () => api<Draft>('POST', '/api/policy/draft', { incident_task_id: lastTaskId }).then(setDraft)
-  const onApply = () => {
-    if (!draft) return Promise.resolve()
-    return api<Policy>('POST', `/api/policy/draft/${encodeURIComponent(draft.draft_id)}/apply`).then(p => {
-      if (p && Array.isArray(p.rules)) setPolicy(p); else loadPolicy().catch(() => {})
-      setDraft(null)
-      say('Rule applied. Run the same scenario again to see it.')
-    })
-  }
-  const onReset = () => api<Policy>('POST', '/api/policy/reset').then(p => {
-    if (p && Array.isArray(p.rules)) setPolicy(p); else loadPolicy().catch(() => {})
-    setDraft(null)
-    say('Drafted rules removed; the shipped PayPal policy is back.')
-  })
-
-  const status = reachable === false ? { word: 'API unreachable', cls: 'down' }
-    : !state ? { word: 'Connecting', cls: 'wait' }
-    : state.boot === 'ready' ? { word: 'Ready', cls: 'up' }
-    : state.boot === 'degraded' ? { word: 'Degraded', cls: 'down' } : { word: 'Starting', cls: 'wait' }
-  const statusTitle = state ? [
-    `gateway ${state.ovara?.gateway_ok ? 'ok' : 'down'}`, `proxy ${state.ovara?.proxy_ok ? 'ok' : 'down'}`,
-    `tool pins ${state.ovara?.pins || 'unknown'}`, `PayPal sandbox token ${state.paypal?.token_ok ? 'ok' : 'missing'}`,
-    state.models?.agent ? `agent ${state.models.agent}` : '', state.models?.drafter ? `drafter ${state.models.drafter}` : '',
-  ].filter(Boolean).join('\n') : ''
-
-  const scenarioMeta = SCENARIOS.find(s => s.id === rScenario)
-  const replayDone = rIdx >= rItems.length && rItems.length > 0
-  const ORDER = ['poisoned', 'duplicate', 'shift']
-  const replayScenarios = replay ? Object.keys(replay.scenarios)
-    .filter(k => (replay.scenarios[k]?.strict?.length || 0) + (replay.scenarios[k]?.off?.length || 0) > 0)
-    .sort((a, b) => (ORDER.indexOf(a) + 1 || 99) - (ORDER.indexOf(b) + 1 || 99)) : []
-  const recordedAt = replay?.recorded_at ? new Date(replay.recorded_at) : null
-  const feedItems = view === 'replay' ? rItems.slice(0, rIdx) : live
-
-  const feedRight = (
-    <div className="seg-small">
-      <button className={view === 'replay' ? 'on' : ''} onClick={() => { setView('replay'); setRRun(n => n + 1) }} disabled={!replay}>Recorded</button>
-      <button className={view === 'live' ? 'on' : ''} onClick={() => setView('live')}>Live</button>
-    </div>
-  )
+  const recordedAt = data.recorded_at ? new Date(data.recorded_at) : null
+  const both = liveUsable && !!replay
 
   return (
     <div className="app">
       <header className="top">
-        <div className="top-inner">
-          <div className="brand"><span className="wordmark">OVARA</span><span className="dim">for PayPal agents</span></div>
-          <div className="switch-wrap">
-            <div className="switch" role="group" aria-label="OVARA on or off">
-              <span className="switch-label">OVARA</span>
-              <button className={profile === 'strict' ? 'on' : ''} aria-pressed={profile === 'strict'} disabled={profileBusy} onClick={() => setProfile('strict')}>on</button>
-              <button className={profile === 'observe' ? 'on' : ''} aria-pressed={profile === 'observe'} disabled={profileBusy} onClick={() => setProfile('observe')}>off</button>
+        <div className="brand">
+          <span className="mark"><Swords size={16} /></span>
+          <span className="wordmark">OVARA <span>Arena</span></span>
+          <span className="tagline">Muse Spark attacks. OVARA holds. Muse Spark learns.</span>
+        </div>
+        <nav className="tabs" aria-label="Views">
+          {(['arena', 'receipts', 'policy'] as View[]).map(v => (
+            <button key={v} className={view === v ? 'on' : ''} onClick={() => setView(v)}>{v === 'arena' ? 'Arena' : v === 'receipts' ? 'Receipts' : 'Policy'}</button>
+          ))}
+        </nav>
+        <div className="top-right">
+          {both && (
+            <div className="seg seg-sm" role="group" aria-label="Data source">
+              <button className={source === 'live' ? 'on' : ''} onClick={() => setPref('live')}>Live</button>
+              <button className={source === 'replay' ? 'on' : ''} onClick={() => setPref('replay')}>Recorded</button>
             </div>
-            <div className="switch-note">off: the agent talks to PayPal directly, nothing is held or receipted</div>
-          </div>
-          <div className={`status ${status.cls}`} title={statusTitle}><span className="dot" />{status.word}</div>
+          )}
+          <span className={`src src-${source === 'live' ? (live.reachable ? 'live' : 'down') : data.placeholder ? 'ph' : 'rec'}`}>
+            <span className="dot" />
+            {source === 'live' ? (live.reachable === false ? 'API unreachable' : live.reachable ? 'Live · PayPal sandbox' : 'Connecting') : data.placeholder ? 'Placeholder data' : 'Recorded run'}
+          </span>
+          {source === 'live' && <button className="icon-btn" title={getToken() ? 'Operator token set' : 'Set operator token'} onClick={() => setTokenOpen(true)}><Key size={15} /></button>}
         </div>
       </header>
 
-      <main className="grid">
-        <Panel title="Live feed" className="a-feed" right={feedRight}>
-          {view === 'replay' && (
-            <div className="replay-bar">
-              <div className="replay-text">
-                {replay?.placeholder
-                  ? <><span className="strong">Placeholder, not a recording.</span> <span className="dim">Sample lines that show the layout. A real run replaces them.</span></>
-                  : <><span className="strong">Recorded run</span> <span className="dim">of the {scenarioMeta?.title.toLowerCase() || rScenario} scenario, OVARA {rMode === 'strict' ? 'on' : 'off'}. Played back, nothing is calling PayPal.{recordedAt && !isNaN(recordedAt.getTime()) ? ` Recorded ${recordedAt.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}.` : ''}</span></>}
-              </div>
-              <div className="replay-actions">
-                {replayScenarios.length > 1 && (
-                  <div className="seg-small" role="group" aria-label="Recorded scenario">
-                    {replayScenarios.map(k => <button key={k} className={rScenario === k ? 'on' : ''} onClick={() => setRScenario(k)}>{SHORT[k] || k}</button>)}
-                  </div>
-                )}
-                {rModes.length > 1 && (
-                  <div className="seg-small">
-                    <button className={rMode === 'strict' ? 'on' : ''} onClick={() => setRMode('strict')}>OVARA on</button>
-                    <button className={rMode === 'off' ? 'on' : ''} onClick={() => setRMode('off')}>OVARA off</button>
-                  </div>
-                )}
-                <button className="btn ghost" onClick={() => setRRun(n => n + 1)}>{replayDone ? 'Play again' : 'Restart'}</button>
-                <button className="btn primary" disabled={reachable === false} onClick={() => run({ scenario: (rScenario as Scenario) }).catch(() => {})}>Run it live</button>
-              </div>
+      {source === 'replay' && (
+        <div className={`banner ${data.placeholder ? 'ph' : ''}`}>
+          {data.placeholder
+            ? <><b>Placeholder data.</b> These rounds and numbers only show the layout; they are not from a real run.</>
+            : <><b>Recorded run,</b> played back from a file. Nothing on this page is calling PayPal.{recordedAt && !isNaN(recordedAt.getTime()) ? ` Recorded ${recordedAt.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}.` : ''}</>}
+        </div>
+      )}
+
+      {view === 'arena' ? (
+        <main className="arena">
+          <div className="band">
+            <Players models={data.models} />
+            {source === 'live' && (liveUsable ? <Controls data={data} onRun={run} onStop={stop} busy={busy} /> : <div className="controls-ph dim small">{live.reachable === false ? 'The live API is not reachable.' : 'Connecting to the API'}</div>)}
+          </div>
+          <Scoreboard data={data} />
+          <div className="field">
+            <Timeline rounds={data.rounds} selected={selected} onSelect={pick} live={liveRound} filter={filter} setFilter={setFilter} />
+            <div className="stage-wrap">
+              {selected === 'live' && liveRound ? (
+                <LiveStage key="live" n={liveRound.n} task={runningTask} feed={feed} profile={liveRound.profile} source={source} />
+              ) : round ? (
+                <RoundStage key={round.id} round={round} feed={feed} feedLoading={feedLoading} source={source} reveal={reveal} setReveal={setReveal} onNeedToken={() => setTokenOpen(true)} />
+              ) : (
+                <div className="stage-empty">
+                  {source === 'replay' && !replayTried ? <><Loader size={16} /> Loading</> : liveRound ? <><Loader size={16} /> Round {liveRound.n} is starting. The attacker is writing its email.</> : 'No rounds yet. Start a match: Muse Spark writes an attack, the agent handles it, and the gate decides.'}
+                </div>
+              )}
             </div>
-          )}
-          <Feed items={feedItems} forceOff={view === 'replay' && rMode === 'off'}
-            empty={view === 'replay'
-              ? (replayTried ? 'No recorded run is available. Switch to Live or start a task.' : 'Loading the recorded run.')
-              : 'Nothing has happened yet. Start a task or a scenario; every call, OVARA’s decision on it and PayPal’s answer appear here, one line each.'} />
-        </Panel>
+          </div>
+        </main>
+      ) : view === 'receipts' ? (
+        <main className="secondary"><ReceiptsView source={source} replay={replay} /></main>
+      ) : (
+        <main className="secondary"><PolicyView source={source} replay={replay} /></main>
+      )}
 
-        <Panel title={<>Approvals{approvals.length ? <span className="count held">{approvals.length} waiting</span> : null}</>} className="a-approvals">
-          <Approvals items={approvals} decide={decide} reachable={reachable !== false && approvalsOk} />
-        </Panel>
-
-        <Panel title="Queue" className="a-queue">
-          <Queue tasks={sortedTasks} onRun={run} onStop={stop} disabled={reachable === false} />
-        </Panel>
-
-        <Panel title={<>Receipts{receipts.length ? <span className="count">{receipts.length}</span> : null}</>} className="a-receipts">
-          <Receipts receipts={receipts} integrity={integrity} verify={verify} />
-        </Panel>
-
-        <Panel title="Policy" className="a-policy" right={<span className="dim small">profile <code>{profile}</code></span>}>
-          <PolicyPanel policy={policy} lastTaskId={lastTaskId} taskRunning={taskRunning} draft={draft} onDraft={onDraft} onApply={onApply} onReset={onReset} />
-        </Panel>
-      </main>
-
+      {tokenOpen && <TokenDialog onClose={() => setTokenOpen(false)} />}
       {notice && <div className={`notice ${notice.bad ? 'bad' : ''}`} role="status">{notice.text}</div>}
     </div>
   )

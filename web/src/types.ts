@@ -1,4 +1,59 @@
-export type Outcome = 'allowed' | 'held' | 'denied' | 'refused'
+export type Profile = 'strict' | 'observe'
+export type Verdict = 'ignored' | 'held_denied' | 'refused' | 'landed' | 'failed'
+export type CallOutcome = 'held_denied' | 'refused' | 'landed' | 'failed' | 'unknown'
+export type HiddenStyle = 'faint_footer' | 'tiny_print' | 'near_white' | 'sticky_note' | 'stamp' | 'visible'
+
+export type Summary = {
+  rounds: number
+  agent_fooled: number
+  landed: number
+  held_denied: number
+  refused: number
+  ignored: number
+  noticed: number
+  with_image: number
+}
+
+export type Attack = {
+  from: string
+  subject: string
+  body: string
+  image?: { name: string; title: string; lines: string[]; hidden_text: string; style: HiddenStyle | string }
+  rationale: string
+}
+
+export type Round = {
+  id: string
+  n: number
+  profile: Profile
+  at: string
+  attack: Attack
+  image_url: string | null
+  hidden_box?: [number, number, number, number]
+  task_id?: string
+  money_calls: { tool: string; arguments: Record<string, unknown>; outcome: CallOutcome | string }[]
+  verdict: Verdict
+  agent_said: string
+  noticed: boolean
+  error?: string
+  draft?: Draft
+}
+
+export type ArenaData = {
+  placeholder?: boolean
+  note?: string
+  recorded_at?: string
+  running: boolean
+  plan: { rounds: number; profile: Profile; done: number } | null
+  models: { attacker?: string; agent?: string; drafter?: string }
+  summary: { strict: Summary; observe: Summary }
+  rounds: Round[]
+  feeds?: Record<string, FeedItem[]>
+  receipts?: Receipt[]
+  integrity?: Integrity
+  policy?: Policy
+}
+
 export type Kind = 'task' | 'thought' | 'call' | 'decision' | 'result' | 'untrusted' | 'done'
 
 export type FeedItem = {
@@ -13,7 +68,7 @@ export type FeedItem = {
   tool?: string
   arguments?: unknown
   arguments_sha256?: string
-  outcome?: Outcome
+  outcome?: string
   approval_id?: string
   receipt_id?: string
   rule?: string
@@ -21,44 +76,23 @@ export type FeedItem = {
   summary?: string
   source?: string
   status?: string
+  image?: string
 }
 
-export type State = {
-  boot: 'starting' | 'ready' | 'degraded'
-  ovara?: { gateway_ok?: boolean; proxy_ok?: boolean; pins?: 'pending' | 'approved' }
-  paypal?: { sandbox?: boolean; token_ok?: boolean }
-  models?: { agent?: string; drafter?: string }
-  profile: 'strict' | 'observe'
-}
-
-export type Task = {
+export type LiveTask = {
   id: string
   text: string
   status: 'queued' | 'running' | 'done' | 'stopped' | 'failed'
+  scenario?: string
+  profile?: Profile
   started_at?: string | number | null
-  ended_at?: string | number | null
-  steps?: number
-}
-
-export type Untrusted = { source?: string; text?: string } | string
-
-export type Approval = {
-  id: string
-  kind: 'tool_call' | 'tools'
-  tool?: string
-  arguments?: unknown
-  arguments_sha256?: string
-  asked_because?: string
-  agent_reason?: string
-  untrusted_context?: Untrusted | null
-  receipt_id?: string
-  waiting_s?: number
+  inbound?: { from: string; subject: string; body: string; attachments: { id: string; name: string; url: string }[] }
 }
 
 export type Receipt = {
   id: string
   at: string | number
-  kind: 'mcp.tool_call' | 'mcp.tools' | 'http.request' | string
+  kind: string
   resource: string
   outcome: string
   approval_id?: string
@@ -73,17 +107,12 @@ export type Rule = {
   resource: string
   effect: string
   description?: string
-  origin?: 'default' | 'paypal' | 'remembered' | 'drafted' | string
+  origin?: string
 }
 
-export type Policy = { profile: 'strict' | 'observe'; rules: Rule[] }
+export type Policy = { profile: Profile; rules: Rule[] }
 
-export type Draft = { draft_id: string; english: string; rules: Rule[]; valid: boolean; problems?: string[] }
+export type VerifyResult = { ok: boolean; count: number; detail?: string }
 
-export type Scenario = 'shift' | 'duplicate' | 'poisoned'
-export type ReplayData = {
-  placeholder?: boolean
-  note?: string
-  recorded_at?: string
-  scenarios: Partial<Record<string, { strict?: FeedItem[]; off?: FeedItem[] }>>
-}
+export type DraftRule = { action_type: string; resource: string; effect?: string; deny?: boolean; escalate?: boolean; description?: string }
+export type Draft = { draft_id: string; english: string; rules: DraftRule[]; valid: boolean; problems?: string[] }

@@ -32,7 +32,7 @@ COPY web ./web
 RUN cd web && npm install && npm run build
 
 FROM node:22-bookworm-slim
-RUN apt-get update && apt-get install -y --no-install-recommends python3 ca-certificates curl tini \
+RUN apt-get update && apt-get install -y --no-install-recommends python3 ca-certificates curl tini fonts-dejavu-core fonts-liberation fontconfig \
  && rm -rf /var/lib/apt/lists/*
 # the PayPal MCP server, pinned, so the first boot does not wait on npm
 RUN npm install -g @paypal/mcp@1.8.1 && npm cache clean --force

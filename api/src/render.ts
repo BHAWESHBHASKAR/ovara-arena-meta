@@ -42,7 +42,7 @@ function hidden(spec: DocSpec): { svg: string; box: [number, number, number, num
       const ls = wrap(t, 150);
       const y0 = H - 18 - (ls.length - 1) * 8;
       return {
-        svg: ls.map((l, i) => `<text x="40" y="${y0 + i * 8}" font-size="7" fill="#9a9a9a" font-family="Helvetica">${esc(l)}</text>`).join(''),
+        svg: ls.map((l, i) => `<text x="40" y="${y0 + i * 8}" font-size="7" fill="#9a9a9a" font-family="Liberation Sans, DejaVu Sans, Helvetica, sans-serif">${esc(l)}</text>`).join(''),
         box: [36, y0 - 8, W - 72, ls.length * 8 + 4],
       };
     }
@@ -50,7 +50,7 @@ function hidden(spec: DocSpec): { svg: string; box: [number, number, number, num
       const ls = wrap(t, 95);
       const y0 = 330;
       return {
-        svg: ls.map((l, i) => `<text x="40" y="${y0 + i * 16}" font-size="13" fill="#f4f4f4" font-family="Helvetica">${esc(l)}</text>`).join(''),
+        svg: ls.map((l, i) => `<text x="40" y="${y0 + i * 16}" font-size="13" fill="#f4f4f4" font-family="Liberation Sans, DejaVu Sans, Helvetica, sans-serif">${esc(l)}</text>`).join(''),
         box: [36, y0 - 14, W - 72, ls.length * 16 + 6],
       };
     }
@@ -60,7 +60,7 @@ function hidden(spec: DocSpec): { svg: string; box: [number, number, number, num
       return {
         svg:
           `<g transform="rotate(-4 700 400)"><rect x="590" y="330" width="260" height="${h}" fill="#fff59d" stroke="#e6d96b"/>` +
-          ls.map((l, i) => `<text x="602" y="${352 + i * 18}" font-size="14" fill="#3b3b3b" font-family="Marker Felt, Comic Sans MS, cursive">${esc(l)}</text>`).join('') +
+          ls.map((l, i) => `<text x="602" y="${352 + i * 18}" font-size="14" fill="#3b3b3b" font-family="DejaVu Sans, Liberation Sans, sans-serif" font-style="italic">${esc(l)}</text>`).join('') +
           `</g>`,
         box: [580, 315, 285, h + 30],
       };
@@ -70,7 +70,7 @@ function hidden(spec: DocSpec): { svg: string; box: [number, number, number, num
       return {
         svg:
           `<g transform="rotate(-12 650 470)" opacity="0.55"><rect x="470" y="${430 - 4}" width="380" height="${ls.length * 17 + 16}" fill="none" stroke="#c62828" stroke-width="3"/>` +
-          ls.map((l, i) => `<text x="482" y="${446 + i * 17}" font-size="13" fill="#c62828" font-family="Courier New" font-weight="bold">${esc(l)}</text>`).join('') +
+          ls.map((l, i) => `<text x="482" y="${446 + i * 17}" font-size="13" fill="#c62828" font-family="Liberation Mono, DejaVu Sans Mono, Courier New, monospace" font-weight="bold">${esc(l)}</text>`).join('') +
           `</g>`,
         box: [455, 380, 420, ls.length * 17 + 110],
       };
@@ -79,7 +79,7 @@ function hidden(spec: DocSpec): { svg: string; box: [number, number, number, num
       const ls = wrap(t, 80);
       const y0 = 330;
       return {
-        svg: ls.map((l, i) => `<text x="40" y="${y0 + i * 20}" font-size="16" fill="#222" font-family="Helvetica">${esc(l)}</text>`).join(''),
+        svg: ls.map((l, i) => `<text x="40" y="${y0 + i * 20}" font-size="16" fill="#222" font-family="Liberation Sans, DejaVu Sans, Helvetica, sans-serif">${esc(l)}</text>`).join(''),
         box: [36, y0 - 16, W - 72, ls.length * 20 + 6],
       };
     }
@@ -88,7 +88,7 @@ function hidden(spec: DocSpec): { svg: string; box: [number, number, number, num
       const ls = wrap(t, 120);
       const y0 = H - 22 - (ls.length - 1) * 13;
       return {
-        svg: ls.map((l, i) => `<text x="40" y="${y0 + i * 13}" font-size="11" fill="#e6e6e6" font-family="Helvetica">${esc(l)}</text>`).join(''),
+        svg: ls.map((l, i) => `<text x="40" y="${y0 + i * 13}" font-size="11" fill="#e6e6e6" font-family="Liberation Sans, DejaVu Sans, Helvetica, sans-serif">${esc(l)}</text>`).join(''),
         box: [36, y0 - 12, W - 72, ls.length * 13 + 6],
       };
     }
@@ -100,14 +100,14 @@ function hidden(spec: DocSpec): { svg: string; box: [number, number, number, num
 export async function renderDoc(spec: DocSpec): Promise<{ png: Buffer; box: [number, number, number, number] }> {
   const body = spec.lines
     .slice(0, 10)
-    .map((l, i) => `<text x="40" y="${120 + i * 26}" font-size="18" fill="#333" font-family="Helvetica">${esc(l.slice(0, 90))}</text>`)
+    .map((l, i) => `<text x="40" y="${120 + i * 26}" font-size="18" fill="#333" font-family="Liberation Sans, DejaVu Sans, Helvetica, sans-serif">${esc(l.slice(0, 90))}</text>`)
     .join('');
   const h = hidden(spec);
   const svg =
     `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}">` +
     `<rect width="${W}" height="${H}" fill="#ffffff"/>` +
     `<rect x="0" y="0" width="${W}" height="8" fill="#1f3a68"/>` +
-    `<text x="40" y="70" font-size="28" font-weight="bold" fill="#1f3a68" font-family="Helvetica">${esc(spec.title.slice(0, 60))}</text>` +
+    `<text x="40" y="70" font-size="28" font-weight="bold" fill="#1f3a68" font-family="Liberation Sans, DejaVu Sans, Helvetica, sans-serif">${esc(spec.title.slice(0, 60))}</text>` +
     `<line x1="40" y1="88" x2="${W - 40}" y2="88" stroke="#dddddd"/>` +
     body +
     h.svg +

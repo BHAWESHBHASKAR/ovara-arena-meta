@@ -2,7 +2,7 @@
 
 const MONEY_TOOLS = new Set([
   'create_refund', 'record_payment_for_invoice', 'record_refund_for_invoice', 'cancel_sent_invoice',
-  'pay_order', 'accept_dispute_claim', 'cancel_subscription', 'update_invoicing', 'delete_invoice',
+  'pay_order', 'capture_order', 'accept_dispute_claim', 'cancel_subscription', 'update_invoicing', 'delete_invoice',
 ])
 export const movesMoney = (tool?: string) => !!tool && MONEY_TOOLS.has(tool)
 

@@ -1,19 +1,29 @@
-const TOKEN_KEY = 'ovara-pay-token'
+const TOKEN_KEY = 'ovara-arena-token'
+const OLD_KEY = 'ovara-pay-token'
 
-// The deployment URL may carry the operator token as #token=...; keep it for the tab and drop it from the address bar.
-function readToken(): string {
+// The deployment URL may carry the operator token as #token=...; keep it and drop it from the address bar.
+function initToken(): string {
   try {
     const m = location.hash.match(/(?:^#|&)token=([^&]+)/)
     if (m) {
-      sessionStorage.setItem(TOKEN_KEY, decodeURIComponent(m[1]))
+      localStorage.setItem(TOKEN_KEY, decodeURIComponent(m[1]))
       history.replaceState(null, '', location.pathname + location.search)
     }
-    return sessionStorage.getItem(TOKEN_KEY) || ''
+    return localStorage.getItem(TOKEN_KEY) || sessionStorage.getItem(OLD_KEY) || ''
   } catch {
     return ''
   }
 }
-const token = readToken()
+let token = initToken()
+
+export const getToken = () => token
+export function setToken(t: string) {
+  token = t.trim()
+  try {
+    if (token) localStorage.setItem(TOKEN_KEY, token)
+    else localStorage.removeItem(TOKEN_KEY)
+  } catch { /* storage unavailable */ }
+}
 
 export class ApiError extends Error {
   status: number
@@ -33,7 +43,6 @@ export async function api<T = unknown>(method: string, path: string, body?: unkn
     const m = (o && (o.error || o.message)) || t.trim().slice(0, 200) || `${r.status} ${r.statusText}`
     throw new ApiError(typeof m === 'string' ? m : JSON.stringify(m), r.status)
   }
+  if (t && j === null) throw new ApiError('not JSON', r.status)
   return j as T
 }
-
-export const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
