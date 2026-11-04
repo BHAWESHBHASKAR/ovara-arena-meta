@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 import type { ArenaData, Integrity, Policy, Receipt, VerifyResult } from './types'
 import { api } from './api'
 import { clock, describeResource, outcomeClass, outcomeWord, short } from './describe'
-import { Check, Loader, Receipt as ReceiptIcon, ShieldCheck, X } from './icons'
 import type { Source } from './data'
 
 export function ReceiptsView({ source, replay }: { source: Source; replay: ArenaData | null }) {
@@ -40,29 +39,27 @@ export function ReceiptsView({ source, replay }: { source: Source; replay: Arena
     <div className="sec">
       <div className="sec-head">
         <div>
-          <h2><ReceiptIcon size={18} /> Receipts</h2>
+          <h2>Receipts</h2>
           <p className="dim">Every OVARA decision is a signed receipt. The proxy log is a hash chain: each entry commits to the one before, so an edited or removed entry breaks the chain.</p>
         </div>
         <div className="verify">
           {source === 'live' ? (
-            <button className="btn primary" disabled={busy} onClick={verify}>{busy ? <><Loader size={14} /> Verifying</> : <><ShieldCheck size={14} /> Verify chain</>}</button>
+            <button className="btn primary" disabled={busy} onClick={verify}>{busy ? 'Verifying' : 'Verify the receipt chain'}</button>
           ) : <span className="dim small">Verify runs against the live API.</span>}
         </div>
       </div>
       {res && (
         <div className={`verify-res ${res.ok ? 'ok' : 'bad'}`}>
-          {res.ok ? <Check size={16} /> : <X size={16} />}
-          <span><b>{res.ok ? 'Receipts check out.' : 'Receipts do not check out.'}</b> {res.count} receipt{res.count === 1 ? '' : 's'}: gateway decision receipts signature-checked, proxy log hash chain verified as a whole.{res.detail && <span className="dim"> {res.detail}</span>}</span>
+                    <span><b>{res.ok ? 'Receipts check out.' : 'Receipts do not check out.'}</b> {res.count} receipt{res.count === 1 ? '' : 's'}: gateway decision receipts signature-checked, proxy log hash chain verified as a whole.{res.detail && <span className="dim"> {res.detail}</span>}</span>
         </div>
       )}
       {integrity && !res && (
         <div className={`verify-res ${integrity.ok ? 'ok' : 'bad'}`}>
-          {integrity.ok ? <Check size={16} /> : <X size={16} />}
-          <span>Last check: {integrity.ok ? 'intact' : 'not intact'}, {integrity.count} receipts. <span className="dim">Public key <code title={pk}>{pk ? short(pk, 32) : 'not reported'}</code></span></span>
+                    <span>Last check: {integrity.ok ? 'intact' : 'not intact'}, {integrity.count} receipts. <span className="dim">Public key <code title={pk}>{pk ? short(pk, 32) : 'not reported'}</code></span></span>
         </div>
       )}
       {err && <div className="err">Could not reach the receipts: {err}</div>}
-      {loading && <div className="dim"><Loader size={14} /> Loading</div>}
+      {loading && <div className="dim">Loading</div>}
       {!loading && !rows.length && <p className="dim">{source === 'replay' ? 'This recorded run does not include receipts. They are served by the live API.' : 'No receipts yet.'}</p>}
       {rows.length > 0 && (
         <table className="rtable">
@@ -100,7 +97,7 @@ export function PolicyView({ source, replay }: { source: Source; replay: ArenaDa
     <div className="sec">
       <div className="sec-head">
         <div>
-          <h2><ShieldCheck size={18} /> Policy</h2>
+          <h2>Policy</h2>
           <p className="dim">The rules OVARA enforces between the agent and PayPal. Rules match a tool by name. Reads are allowed; calls that move money or cancel a receivable wait for a person.</p>
         </div>
         {policy && <span className={`pchip big ${policy.profile === 'observe' ? 'off' : 'on'}`}>{policy.profile === 'observe' ? 'OVARA off' : 'OVARA on'}</span>}
