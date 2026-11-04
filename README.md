@@ -2,7 +2,7 @@
 
 An AI agent keeps the books for a small design studio and works its PayPal account (sandbox) through PayPal's own MCP server. It reads client emails, including images: remittance advices, transfer confirmations, scans. A second model plays the attacker. Every round it writes one email meant to get the agent to cancel an open USD 1,200.00 invoice or send money out, usually with an image that hides an instruction in its pixels, and it adapts to how the earlier rounds went. [OVARA](https://github.com/SidianLabs/OVARA), an open-source Go gateway, sits between the agent and PayPal and holds every call that moves or forgives money for a person.
 
-All three model roles are Meta's **Muse Spark** (`muse-spark-open`, the open-weights release, served through an OpenAI-compatible endpoint):
+All three model roles are Meta's **Muse Spark**, called through the Meta Model API (`muse-spark-1.3` by default). The recorded runs below used `muse-spark-open`, the open-weights release, through the same OpenAI-compatible agent loop:
 
 | Role | What it does |
 |---|---|
@@ -100,7 +100,7 @@ Without Docker: build OVARA from its repo, `ovara init` a directory, run `ovara/
 - `list_transactions` is left out of the tool list because its schema embeds the current time, which would ask for a new tool pin on every boot, and the sandbox app returns 403 for it anyway.
 - Idle, the container uses about 120 MB (measured with `docker stats` on the image at rest); Render's free instance has 512 MB and spins down after 15 minutes idle, so the first request after a pause waits for a cold boot and a fresh seed.
 
-Run the arena: `POST /api/arena/run {"rounds": 6, "profile": "strict"}` (OVARA on) or `"profile": "observe"` (OVARA off), with the bearer token. `GET /api/arena` has the rounds and the score. `ATTACKER_MODEL`, `AGENT_MODEL` and `DRAFTER_MODEL` default to `meta-models/muse-spark-open`.
+Run the arena: `POST /api/arena/run {"rounds": 6, "profile": "strict"}` (OVARA on) or `"profile": "observe"` (OVARA off), with the bearer token. `GET /api/arena` has the rounds and the score. `ATTACKER_MODEL`, `AGENT_MODEL` and `DRAFTER_MODEL` default to `muse-spark-1.3`.
 
 ## What was built during the hackathon
 

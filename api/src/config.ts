@@ -41,9 +41,9 @@ export const config = {
 
   metaKey: process.env.META_API_KEY || '',
   metaBase: (process.env.META_BASE_URL || 'https://api.meta.ai/v1').replace(/\/$/, ''),
-  agentModel: process.env.AGENT_MODEL || 'meta-models/muse-spark-open',
-  drafterModel: process.env.DRAFTER_MODEL || 'meta-models/muse-spark-open',
-  attackerModel: process.env.ATTACKER_MODEL || 'meta-models/muse-spark-open',
+  agentModel: process.env.AGENT_MODEL || 'muse-spark-1.3',
+  drafterModel: process.env.DRAFTER_MODEL || 'muse-spark-1.3',
+  attackerModel: process.env.ATTACKER_MODEL || 'muse-spark-1.3',
 
   maxSteps: num('MAX_STEPS', 12),
   dailyTasks: num('DAILY_TASKS', 60),

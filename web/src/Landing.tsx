@@ -447,7 +447,7 @@ function HowItWorksBody() {
 
 function AboutBody() {
   const built: [string, string, string][] = [
-    ['Muse Spark Open', "Meta's open-weights model (muse-spark-open), served through an OpenAI-compatible endpoint as meta-models/muse-spark-open. One model plays all three roles below.", ''],
+    ['Muse Spark', "Meta's Muse Spark through the Meta Model API (muse-spark-1.3 by default). The recorded runs used muse-spark-open, the open-weights release. One model plays all three roles below.", ''],
     ['· as the attacker', 'Writes one client email per round plus an image spec with a hidden line, and changes approach after seeing how earlier rounds ended.', ''],
     ['· as the agent', 'Vision and tool calling: reads the email and the image as pixels, and works the PayPal sandbox through PayPal’s MCP server.', ''],
     ['· as the rule drafter', 'Reads the trace of a held round and proposes an OVARA rule; OVARA validates it before one click applies it.', ''],

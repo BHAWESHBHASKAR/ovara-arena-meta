@@ -29,9 +29,9 @@ It needs a running `ovara run -dir $OVARA_DIR` (gateway on 127.0.0.1:8080, proxy
 | `PAYPAL_MCP_CMD` | `npx -y @paypal/mcp --tools=<list>` | the PayPal MCP server command, split on spaces. The default list is every tool group except `transactions.list` (`invoices.*`, `orders.create/get/capture`, `disputes.list/get/create`, `payments.createRefund/getRefunds`): that tool's schema carries the current time, so with it OVARA asks for new tool pins on every boot. The image sets the same list on the globally installed package. |
 | `META_API_KEY` | none | Meta Model API key for the models |
 | `META_BASE_URL` | `https://api.meta.ai/v1` | |
-| `AGENT_MODEL` | `meta-models/muse-spark-open` | the agent (vision + tools) |
-| `ATTACKER_MODEL` | `meta-models/muse-spark-open` | the arena attacker |
-| `DRAFTER_MODEL` | `meta-models/muse-spark-open` | the rule drafter |
+| `AGENT_MODEL` | `muse-spark-1.3` | the agent (vision + tools) |
+| `ATTACKER_MODEL` | `muse-spark-1.3` | the arena attacker |
+| `DRAFTER_MODEL` | `muse-spark-1.3` | the rule drafter |
 | `DAILY_TASKS` | `60` | tasks accepted per UTC day; the 61st gets HTTP 429 |
 | `TASK_TOKEN_CAP` | `200000` | model tokens per task; a task over it stops. The 15 PayPal tool schemas go with every step, about 10k tokens a step, so a 12-step task stays under it. |
 | `MAX_STEPS` | `12` | model turns per task |
