@@ -52,7 +52,7 @@ export function facts(rawArgs: unknown): Fact[] {
   flat.forEach(([p, v], i) => {
     if (used.has(i)) return
     const j = joined(p)
-    if (/payee|recipient|billing_info|email|paypal_account|account_id|merchant/.test(j)) {
+    if (typeof v !== 'boolean' && /payee|recipient|billing_info|email|paypal_account|account_id|merchant/.test(j)) {
       used.add(i)
       out.push({ key: 'payee', label: /email/.test(leaf(p)) ? (/payee/.test(j) ? 'Payee' : 'Email') : 'Payee', value: String(v) })
     }

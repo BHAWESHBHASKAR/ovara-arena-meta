@@ -38,6 +38,8 @@ export type Round = {
   replay_of?: string
   error?: string
   draft?: Draft
+  target_number?: string
+  target_id?: string
 }
 
 export type ArenaData = {
@@ -78,6 +80,7 @@ export type FeedItem = {
   source?: string
   status?: string
   image?: string
+  unchecked?: boolean
 }
 
 export type LiveTask = {
