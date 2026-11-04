@@ -35,6 +35,7 @@ export type Round = {
   verdict: Verdict
   agent_said: string
   noticed: boolean
+  replay_of?: string
   error?: string
   draft?: Draft
 }

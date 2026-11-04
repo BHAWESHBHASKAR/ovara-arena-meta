@@ -78,7 +78,12 @@ export function Scoreboard({ data }: { data: ArenaData }) {
       <Side s={data.summary.strict} on />
       <div className="vs">vs</div>
       <Side s={data.summary.observe} on={false} />
-      <div className="sb-note">Each side is its own adaptive match: the attacker changed its approach from round to round, so the two sides did not see the same emails. Value lost counts the open {usd(INVOICE_USD)} Contoso invoice per landed round.</div>
+      <div className="sb-note">
+        {data.rounds.some((r) => r.replay_of)
+          ? 'Same attacks on both sides: the attacker wrote each round against OVARA on, then the identical email and image were sent again with OVARA off. The agent is not deterministic, so it was not fooled by the same rounds each time.'
+          : 'Each side is its own adaptive match: the attacker changed its approach from round to round, so the two sides did not see the same emails.'}{' '}
+        Value lost counts the open {usd(INVOICE_USD)} Contoso invoice per landed round.
+      </div>
     </div>
   )
 }
